@@ -3,44 +3,47 @@ import { PageHeader } from '../components/PageHeader'
 import { Card } from '../components/Card'
 import { Input } from '../components/Input'
 import { Button } from '../components/Button'
-import { Alert } from '../components/Alert'
 import { api } from '../api'
 import { AppLayout } from '../layouts/AppLayout'
+import { useToast } from '../contexts/ToastContext'
 
 export function Profile({ user, setUser }) {
+  const toast = useToast()
   const [form, setForm] = useState({ name: user.name, email: user.email })
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '' })
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const updateProfile = async (e) => {
     e.preventDefault()
-    setError(''); setMessage(''); setLoading(true)
+    setLoading(true)
     try {
       const data = await api('/api/profile', { method: 'PUT', body: JSON.stringify(form) })
       setUser(data.user)
-      setMessage('Profile updated')
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
+      toast.success('Profile updated')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const changePassword = async (e) => {
     e.preventDefault()
-    setError(''); setMessage(''); setLoading(true)
+    setLoading(true)
     try {
       await api('/api/profile/password', { method: 'PUT', body: JSON.stringify(pwForm) })
       setPwForm({ currentPassword: '', newPassword: '' })
-      setMessage('Password changed')
-    } catch (err) { setError(err.message) }
-    finally { setLoading(false) }
+      toast.success('Password changed')
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div className="max-w-md mx-auto space-y-6">
       <PageHeader title="Profile" />
-      {message && <Alert type="success">{message}</Alert>}
-      {error && <Alert>{error}</Alert>}
 
       <Card>
         <form onSubmit={updateProfile} className="space-y-3">

@@ -7,12 +7,16 @@ import { DarkModeToggle } from '../components/Nav/DarkModeToggle'
 
 export function AppLayout({ children }) {
   const { t, dark, setDark } = useTheme()
-  const { user, navigate, logout } = useApp()
+  const { user, navigate, logout, transitioning } = useApp()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
     <div className="max-w-3xl mx-auto px-6">
-      <nav className={`flex items-center justify-between h-14 border-b ${t.border}`}>
+      <nav className={`flex items-center justify-between h-14 border-b ${t.border} relative`}>
+        {/* Loading indicator */}
+        {transitioning && (
+          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500 animate-pulse" />
+        )}
         <button onClick={() => navigate('home')} className="font-semibold hover:opacity-70 transition">BasicBen</button>
         <DesktopNav user={user} navigate={navigate} logout={logout} />
 

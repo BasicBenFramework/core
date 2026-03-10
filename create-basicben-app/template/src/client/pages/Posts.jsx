@@ -7,9 +7,11 @@ import { Loading } from '../components/Loading'
 import { Empty } from '../components/Empty'
 import { api } from '../api'
 import { AppLayout } from '../layouts/AppLayout'
+import { useToast } from '../contexts/ToastContext'
 
 export function Posts({ navigate }) {
   const { t } = useTheme()
+  const toast = useToast()
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -19,8 +21,13 @@ export function Posts({ navigate }) {
 
   const deletePost = async (id) => {
     if (!confirm('Delete this post?')) return
-    await api(`/api/posts/${id}`, { method: 'DELETE' })
-    loadPosts()
+    try {
+      await api(`/api/posts/${id}`, { method: 'DELETE' })
+      toast.success('Post deleted')
+      loadPosts()
+    } catch (err) {
+      toast.error(err.message)
+    }
   }
 
   if (loading) return <Loading />

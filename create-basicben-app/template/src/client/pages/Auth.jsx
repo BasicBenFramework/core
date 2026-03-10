@@ -2,20 +2,19 @@ import { useState } from 'react'
 import { useTheme } from '../components/ThemeContext'
 import { Input } from '../components/Input'
 import { Button } from '../components/Button'
-import { Alert } from '../components/Alert'
 import { api } from '../api'
 import { AuthLayout } from '../layouts/AuthLayout'
+import { useToast } from '../contexts/ToastContext'
 
 export function Auth({ mode, setUser, navigate }) {
   const { t } = useTheme()
+  const toast = useToast()
   const [form, setForm] = useState({ name: '', email: '', password: '' })
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const isLogin = mode === 'login'
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
     setLoading(true)
     try {
       const data = await api(`/api/auth/${mode}`, {
@@ -24,9 +23,10 @@ export function Auth({ mode, setUser, navigate }) {
       })
       localStorage.setItem('token', data.token)
       setUser(data.user)
+      toast.success(isLogin ? 'Welcome back!' : 'Account created!')
       navigate('home')
     } catch (err) {
-      setError(err.message)
+      toast.error(err.message)
     } finally {
       setLoading(false)
     }
@@ -36,7 +36,6 @@ export function Auth({ mode, setUser, navigate }) {
     <div className="max-w-xs mx-auto py-8">
       <h1 className="text-2xl font-bold text-center mb-1">{isLogin ? 'Welcome back' : 'Create account'}</h1>
       <p className={`text-sm ${t.muted} text-center mb-6`}>{isLogin ? 'Sign in to continue' : 'Get started for free'}</p>
-      {error && <Alert>{error}</Alert>}
       <form onSubmit={handleSubmit} className="space-y-3 mt-4">
         {!isLogin && <Input placeholder="Name" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />}
         <Input type="email" placeholder="Email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />

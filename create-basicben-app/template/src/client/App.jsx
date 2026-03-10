@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AppProvider } from './contexts/AppContext'
+import { ToastProvider } from './contexts/ToastContext'
 import { RootLayout } from './layouts/RootLayout'
 import { Home } from './pages/Home'
 import { Auth } from './pages/Auth'
@@ -12,17 +13,58 @@ import { GettingStarted } from './pages/GettingStarted'
 import { Database } from './pages/Database'
 import { api } from './api'
 
-const pages = {
-  home: Home,
-  login: Auth,
-  register: Auth,
-  feed: Feed,
-  feedPost: FeedPost,
-  profile: Profile,
-  posts: Posts,
-  postForm: PostForm,
-  gettingStarted: GettingStarted,
-  database: Database,
+// Route configuration with guards
+const routes = {
+  '/': { view: 'home', component: Home },
+  '/login': { view: 'login', component: Auth, guest: true },
+  '/register': { view: 'register', component: Auth, guest: true },
+  '/feed': { view: 'feed', component: Feed },
+  '/feed/:id': { view: 'feedPost', component: FeedPost },
+  '/profile': { view: 'profile', component: Profile, auth: true },
+  '/posts': { view: 'posts', component: Posts, auth: true },
+  '/posts/new': { view: 'postForm', component: PostForm, auth: true },
+  '/posts/:id/edit': { view: 'postForm', component: PostForm, auth: true },
+  '/docs': { view: 'gettingStarted', component: GettingStarted },
+  '/docs/database': { view: 'database', component: Database },
+}
+
+// Map view names to URL paths
+const viewToPath = {
+  home: '/',
+  login: '/login',
+  register: '/register',
+  feed: '/feed',
+  feedPost: (id) => `/feed/${id}`,
+  profile: '/profile',
+  posts: '/posts',
+  postForm: (id) => id ? `/posts/${id}/edit` : '/posts/new',
+  gettingStarted: '/docs',
+  database: '/docs/database',
+}
+
+function parseUrl(pathname) {
+  // Try exact match first
+  if (routes[pathname]) {
+    return { ...routes[pathname], params: {} }
+  }
+
+  // Try pattern matching
+  for (const [pattern, config] of Object.entries(routes)) {
+    const paramMatch = pattern.match(/:(\w+)/g)
+    if (!paramMatch) continue
+
+    const regex = new RegExp('^' + pattern.replace(/:(\w+)/g, '([^/]+)') + '$')
+    const match = pathname.match(regex)
+    if (match) {
+      const params = {}
+      paramMatch.forEach((param, i) => {
+        params[param.slice(1)] = match[i + 1]
+      })
+      return { ...config, params }
+    }
+  }
+
+  return { view: 'home', component: Home, params: {} }
 }
 
 function resolveLayout(PageComponent, pageElement) {
@@ -74,7 +116,32 @@ function App() {
   const [view, setView] = useState('home')
   const [viewData, setViewData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [transitioning, setTransitioning] = useState(false)
+  const [currentRoute, setCurrentRoute] = useState(null)
 
+  // Initialize from URL on mount
+  useEffect(() => {
+    const { view, params } = parseUrl(window.location.pathname)
+    setView(view)
+    setViewData(params.id || null)
+  }, [])
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const handlePopState = () => {
+      const { view, params } = parseUrl(window.location.pathname)
+      setTransitioning(true)
+      setTimeout(() => {
+        setView(view)
+        setViewData(params.id || null)
+        setTransitioning(false)
+      }, 150)
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // Auth check
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (token) {
@@ -87,29 +154,79 @@ function App() {
     }
   }, [])
 
-  const navigate = (v, data = null) => { setView(v); setViewData(data) }
-  const logout = () => { localStorage.removeItem('token'); setUser(null); navigate('home') }
+  // Route guards effect
+  useEffect(() => {
+    if (loading) return
+
+    const route = Object.values(routes).find(r => r.view === view)
+    if (!route) return
+
+    // Protected route - redirect to login
+    if (route.auth && !user) {
+      navigateInternal('login', null, true)
+      return
+    }
+
+    // Guest-only route - redirect to home if logged in
+    if (route.guest && user) {
+      navigateInternal('home', null, true)
+      return
+    }
+
+    setCurrentRoute(route)
+  }, [view, user, loading])
+
+  const navigateInternal = useCallback((v, data = null, replace = false) => {
+    // Build the URL path
+    let path = viewToPath[v]
+    if (typeof path === 'function') {
+      path = path(data)
+    }
+
+    // Update browser history
+    if (replace) {
+      window.history.replaceState({ view: v, data }, '', path)
+    } else {
+      window.history.pushState({ view: v, data }, '', path)
+    }
+
+    // Animate transition
+    setTransitioning(true)
+    setTimeout(() => {
+      setView(v)
+      setViewData(data)
+      setTransitioning(false)
+      // Scroll to top on navigation
+      window.scrollTo(0, 0)
+    }, 150)
+  }, [])
+
+  const navigate = useCallback((v, data = null) => {
+    navigateInternal(v, data, false)
+  }, [navigateInternal])
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('token')
+    setUser(null)
+    navigate('home')
+  }, [navigate])
 
   if (loading) return <LoadingScreen />
 
-  const PageComponent = pages[view]
-  if (!PageComponent) return <LoadingScreen />
-
+  const PageComponent = Object.values(routes).find(r => r.view === view)?.component || Home
   const pageProps = getPageProps(view, { user, setUser, navigate, viewData })
-
-  // Check if user is required for this view
-  if ((view === 'profile' || view === 'posts' || view === 'postForm') && !user) {
-    return <LoadingScreen />
-  }
-
   const pageElement = <PageComponent {...pageProps} />
 
   return (
-    <AppProvider value={{ user, setUser, navigate, logout, viewData, view }}>
-      <RootLayout>
-        {resolveLayout(PageComponent, pageElement)}
-      </RootLayout>
-    </AppProvider>
+    <ToastProvider>
+      <AppProvider value={{ user, setUser, navigate, logout, viewData, view, transitioning }}>
+        <RootLayout>
+          <div className={`transition-opacity duration-150 ${transitioning ? 'opacity-0' : 'opacity-100'}`}>
+            {resolveLayout(PageComponent, pageElement)}
+          </div>
+        </RootLayout>
+      </AppProvider>
+    </ToastProvider>
   )
 }
 
