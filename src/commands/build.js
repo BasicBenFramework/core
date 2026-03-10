@@ -10,19 +10,28 @@ import { bold, cyan, green, yellow, dim, red } from '../cli/colors.js'
 
 export async function run(args, flags) {
   const cwd = process.cwd()
+  const staticOnly = flags.static || false
 
-  console.log(`\n${bold('BasicBen')} ${dim('build')}\n`)
+  console.log(`\n${bold('BasicBen')} ${dim('build')}${staticOnly ? dim(' --static') : ''}\n`)
 
   // Build client with Vite
   console.log(`${cyan('Building client...')}\n`)
 
-  const viteBuild = await runViteBuild(cwd)
+  const outDir = staticOnly ? 'dist' : 'dist/client'
+  const viteBuild = await runViteBuild(cwd, outDir)
   if (!viteBuild.success) {
     console.error(`\n${red('Client build failed')}\n`)
     process.exit(1)
   }
 
-  console.log(`\n${green('✓')} Client built to ${dim('dist/client')}\n`)
+  console.log(`\n${green('✓')} Client built to ${dim(outDir)}\n`)
+
+  // Static-only build stops here
+  if (staticOnly) {
+    console.log(`${green('Static build complete!')}\n`)
+    console.log(`Deploy the ${cyan('dist/')} folder to any static host (CF Pages, Netlify, etc.)\n`)
+    return
+  }
 
   // Copy server files to dist
   console.log(`${cyan('Preparing server...')}\n`)
@@ -39,9 +48,9 @@ export async function run(args, flags) {
 /**
  * Run Vite build
  */
-function runViteBuild(cwd) {
+function runViteBuild(cwd, outDir = 'dist/client') {
   return new Promise((resolve) => {
-    const proc = spawn('npx', ['vite', 'build'], {
+    const proc = spawn('npx', ['vite', 'build', '--outDir', outDir], {
       cwd,
       stdio: 'inherit',
       env: {

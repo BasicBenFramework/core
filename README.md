@@ -135,6 +135,7 @@ The frontend uses reusable components:
 # Development
 basicben dev                       # Start Vite + Node dev server
 basicben build                     # Bundle client + server for production
+basicben build --static            # Build client only (for static hosts)
 basicben start                     # Run production server
 basicben test                      # Run tests with Vitest
 

@@ -41,7 +41,10 @@ export const commandMeta = {
   },
   build: {
     description: 'Build client and server for production',
-    usage: 'basicben build'
+    usage: 'basicben build',
+    options: {
+      '--static': 'Build client only (for static hosts like CF Pages)'
+    }
   },
   start: {
     description: 'Start production server',
