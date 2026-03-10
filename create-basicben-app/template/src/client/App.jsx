@@ -83,7 +83,7 @@ function Home({ user, t, dark }) {
       <section className="text-center py-8">
         <p className={`text-xs ${t.subtle} mb-3 tracking-wide uppercase`}>Now in beta</p>
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-3">
-          Build faster with BasicBen
+          Build faster with <span className="underline decoration-2 underline-offset-4">BasicBen</span>
         </h1>
         <p className={`${t.muted} max-w-md mx-auto mb-6`}>
           Full-stack React framework. Minimal dependencies.
