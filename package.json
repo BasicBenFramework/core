@@ -23,7 +23,7 @@
     "./db": "./src/db/index.js"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=24.14.0"
   },
   "scripts": {
     "test": "node --test src/**/*.test.js",
