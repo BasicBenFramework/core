@@ -69,7 +69,9 @@ export class Router {
   #pathToPattern(path) {
     // Convert :param to named capture groups
     // /users/:id -> /users/(?<id>[^/]+)
-    const pattern = path
+    // Also handle catch-all: /* -> /(.*)
+    let pattern = path
+      .replace(/\/\*$/, '/(?<_catchAll>.*)')  // Catch-all at end
       .replace(/\/:(\w+)/g, '/(?<$1>[^/]+)')
       .replace(/\//g, '\\/')
 

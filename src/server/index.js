@@ -10,6 +10,7 @@ import { bodyParser, json } from './body-parser.js'
 import { cors } from './cors.js'
 import { serveStatic } from './static.js'
 import { loadRoutes, loadMiddleware, loadConfig } from './loader.js'
+import { createFileRouter, filePathToRoutePath, getRouteManifest } from './file-router.js'
 
 /**
  * Create a BasicBen server instance
@@ -44,8 +45,17 @@ export async function createServer(options = {}) {
     }
   }
 
-  // Load routes
-  if (mergedConfig.autoloadRoutes !== false) {
+  // Load routes (code-based or file-based)
+  if (mergedConfig.fileRoutes) {
+    // File-based routing (opt-in)
+    const fileRouterOptions = typeof mergedConfig.fileRoutes === 'object'
+      ? mergedConfig.fileRoutes
+      : {}
+    const pagesDir = fileRouterOptions.dir || mergedConfig.pagesDir || 'src/pages'
+    const fileRouter = await createFileRouter(pagesDir, fileRouterOptions)
+    fileRouter.applyTo(app)
+  } else if (mergedConfig.autoloadRoutes !== false) {
+    // Code-based routing (default)
     const router = await loadRoutes(mergedConfig.routesDir)
     router.applyTo(app)
   }
@@ -85,8 +95,10 @@ const defaultConfig = {
   static: { dir: 'public' },
   routesDir: 'src/routes',
   middlewareDir: 'src/middleware',
+  pagesDir: 'src/pages',
   autoloadRoutes: true,
-  autoloadMiddleware: true
+  autoloadMiddleware: true,
+  fileRoutes: false // Set to true or {} to enable file-based routing
 }
 
 /**
@@ -163,3 +175,4 @@ export { bodyParser, json } from './body-parser.js'
 export { cors } from './cors.js'
 export { serveStatic } from './static.js'
 export { loadRoutes, loadMiddleware, loadConfig } from './loader.js'
+export { createFileRouter, filePathToRoutePath, getRouteManifest } from './file-router.js'
