@@ -1,0 +1,16 @@
+/**
+ * {{name}} seeder
+ * Run with: basicben seed {{lower}}
+ */
+
+import { db } from 'basicben'
+
+export async function seed() {
+  // Example: Insert sample data
+  // await (await db.table('{{tableName}}')).insert({
+  //   name: 'Sample',
+  //   created_at: new Date().toISOString()
+  // })
+
+  console.log('{{name}} seeder completed')
+}
