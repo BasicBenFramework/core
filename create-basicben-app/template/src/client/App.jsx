@@ -4,6 +4,7 @@ function App() {
   const [user, setUser] = useState(null)
   const [view, setView] = useState('home')
   const [loading, setLoading] = useState(true)
+  const [dark, setDark] = useState(true)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -19,39 +20,46 @@ function App() {
   }, [])
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center bg-black">
-      <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+    return <div className={`min-h-screen flex items-center justify-center ${dark ? 'bg-black' : 'bg-white'}`}>
+      <div className={`w-5 h-5 border-2 rounded-full animate-spin ${dark ? 'border-white/20 border-t-white' : 'border-black/20 border-t-black'}`} />
     </div>
   }
 
+  const t = dark
+    ? { bg: 'bg-black', text: 'text-white', muted: 'text-white/50', subtle: 'text-white/30', border: 'border-white/10', card: 'bg-white/5', btn: 'bg-white text-black', btnHover: 'hover:bg-white/90' }
+    : { bg: 'bg-white', text: 'text-black', muted: 'text-black/50', subtle: 'text-black/30', border: 'border-black/10', card: 'bg-black/5', btn: 'bg-black text-white', btnHover: 'hover:bg-black/90' }
+
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute -top-32 -right-32 w-64 h-64 bg-purple-500/20 rounded-full blur-[100px]" />
-        <div className="absolute bottom-0 -left-32 w-64 h-64 bg-blue-500/15 rounded-full blur-[100px]" />
+    <div className={`min-h-screen ${t.bg} ${t.text} transition-colors duration-300`}>
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className={`absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-[150px] ${dark ? 'bg-purple-500/10' : 'bg-purple-500/5'}`} />
+        <div className={`absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[150px] ${dark ? 'bg-blue-500/10' : 'bg-blue-500/5'}`} />
       </div>
 
-      <div className="relative max-w-4xl mx-auto px-6">
-        <nav className="flex items-center justify-between h-14 border-b border-white/5">
+      <div className="relative max-w-3xl mx-auto px-6">
+        <nav className={`flex items-center justify-between h-14 border-b ${t.border}`}>
           <button onClick={() => setView('home')} className="font-semibold hover:opacity-70 transition">
             BasicBen
           </button>
           <div className="flex items-center gap-2">
+            <button onClick={() => setDark(!dark)} className={`p-2 rounded-lg ${t.card} transition`}>
+              {dark ? '☀️' : '🌙'}
+            </button>
             {user ? (
               <>
-                <span className="text-sm text-white/40">{user.email}</span>
+                <span className={`text-sm ${t.muted} hidden sm:block`}>{user.email}</span>
                 <button onClick={() => { localStorage.removeItem('token'); setUser(null) }}
-                  className="text-sm px-3 py-1.5 rounded-full hover:bg-white/5 transition">
+                  className={`text-sm px-3 py-1.5 rounded-full ${t.card} transition`}>
                   Log out
                 </button>
               </>
             ) : (
               <>
-                <button onClick={() => setView('login')} className="text-sm text-white/60 hover:text-white transition">
+                <button onClick={() => setView('login')} className={`text-sm ${t.muted} hover:opacity-70 transition`}>
                   Sign in
                 </button>
                 <button onClick={() => setView('register')}
-                  className="text-sm px-3 py-1.5 bg-white text-black rounded-full font-medium hover:bg-white/90 transition">
+                  className={`text-sm px-3 py-1.5 rounded-full font-medium ${t.btn} ${t.btnHover} transition`}>
                   Get started
                 </button>
               </>
@@ -60,67 +68,66 @@ function App() {
         </nav>
 
         <main className="py-16">
-          {view === 'home' && <Home user={user} />}
-          {view === 'login' && <Auth mode="login" setUser={setUser} setView={setView} />}
-          {view === 'register' && <Auth mode="register" setUser={setUser} setView={setView} />}
+          {view === 'home' && <Home user={user} t={t} dark={dark} />}
+          {view === 'login' && <Auth mode="login" setUser={setUser} setView={setView} t={t} />}
+          {view === 'register' && <Auth mode="register" setUser={setUser} setView={setView} t={t} />}
         </main>
       </div>
     </div>
   )
 }
 
-function Home({ user }) {
+function Home({ user, t, dark }) {
   return (
-    <div className="space-y-16">
-      <section className="text-center py-12">
-        <p className="text-xs text-white/40 mb-4 tracking-wide uppercase">Now in beta</p>
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
-          Build faster with{' '}
-          <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">BasicBen</span>
+    <div className="space-y-12">
+      <section className="text-center py-8">
+        <p className={`text-xs ${t.subtle} mb-3 tracking-wide uppercase`}>Now in beta</p>
+        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-3">
+          Build faster with BasicBen
         </h1>
-        <p className="text-white/50 max-w-md mx-auto mb-6">
-          Full-stack React framework. Minimal dependencies. Everything you need.
+        <p className={`${t.muted} max-w-md mx-auto mb-6`}>
+          Full-stack React framework. Minimal dependencies.
         </p>
         <div className="flex justify-center gap-3">
-          <button className="px-4 py-2 bg-white text-black text-sm font-medium rounded-full hover:bg-white/90 transition">
+          <button className={`px-4 py-2 text-sm font-medium rounded-full ${t.btn} ${t.btnHover} transition`}>
             Get started
           </button>
-          <code className="px-4 py-2 bg-white/5 border border-white/10 text-sm rounded-full text-white/60">
+          <code className={`px-4 py-2 text-sm rounded-full ${t.card} ${t.muted} border ${t.border}`}>
             npx create-basicben-app
           </code>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
-          ['⚡', 'Vite Powered', 'Fast HMR & builds'],
-          ['🔐', 'Auth Built-in', 'JWT ready to go'],
-          ['🗄️', 'Database', 'SQLite or Postgres'],
-          ['🪶', '3.7k Lines', 'Small & auditable'],
+          ['⚡', 'Vite', 'Fast builds'],
+          ['🔐', 'Auth', 'JWT ready'],
+          ['🗄️', 'Database', 'SQL built-in'],
+          ['🪶', 'Tiny', '3.7k lines'],
         ].map(([icon, title, desc]) => (
-          <div key={title} className="p-4 rounded-xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition">
-            <span className="text-xl">{icon}</span>
+          <div key={title} className={`p-4 rounded-xl ${t.card} border ${t.border} hover:border-opacity-50 transition`}>
+            <span className="text-lg">{icon}</span>
             <p className="font-medium text-sm mt-2">{title}</p>
-            <p className="text-xs text-white/40 mt-0.5">{desc}</p>
+            <p className={`text-xs ${t.subtle} mt-0.5`}>{desc}</p>
           </div>
         ))}
       </section>
 
       {user && (
-        <section className="p-5 rounded-xl bg-white/[0.02] border border-white/5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-sm font-medium">
+        <section className={`p-4 rounded-xl ${t.card} border ${t.border}`}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${dark ? 'bg-white text-black' : 'bg-black text-white'}`}>
               {user.name[0].toUpperCase()}
             </div>
             <div>
               <p className="font-medium text-sm">{user.name}</p>
-              <p className="text-xs text-white/40">{user.email}</p>
+              <p className={`text-xs ${t.subtle}`}>{user.email}</p>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[['Status', 'Active'], ['Plan', 'Free'], ['API Calls', '0']].map(([k, v]) => (
-              <div key={k} className="p-3 rounded-lg bg-white/5">
-                <p className="text-xs text-white/40">{k}</p>
+          <div className="grid grid-cols-3 gap-2">
+            {[['Status', 'Active'], ['Plan', 'Free'], ['Calls', '0']].map(([k, v]) => (
+              <div key={k} className={`p-2 rounded-lg ${dark ? 'bg-white/5' : 'bg-black/5'}`}>
+                <p className={`text-xs ${t.subtle}`}>{k}</p>
                 <p className="font-medium text-sm">{v}</p>
               </div>
             ))}
@@ -128,27 +135,27 @@ function Home({ user }) {
         </section>
       )}
 
-      <section className="rounded-xl bg-white/[0.02] border border-white/5 overflow-hidden">
-        <div className="flex items-center gap-1.5 px-3 h-8 bg-white/5 border-b border-white/5">
-          <div className="w-2 h-2 rounded-full bg-white/10" />
-          <div className="w-2 h-2 rounded-full bg-white/10" />
-          <div className="w-2 h-2 rounded-full bg-white/10" />
-          <span className="ml-2 text-xs text-white/30">routes/api.js</span>
+      <section className={`rounded-xl ${t.card} border ${t.border} overflow-hidden`}>
+        <div className={`flex items-center gap-1.5 px-3 h-8 border-b ${t.border}`}>
+          <div className={`w-2 h-2 rounded-full ${dark ? 'bg-white/20' : 'bg-black/20'}`} />
+          <div className={`w-2 h-2 rounded-full ${dark ? 'bg-white/20' : 'bg-black/20'}`} />
+          <div className={`w-2 h-2 rounded-full ${dark ? 'bg-white/20' : 'bg-black/20'}`} />
+          <span className={`ml-2 text-xs ${t.subtle}`}>routes/api.js</span>
         </div>
-        <pre className="p-4 text-xs leading-relaxed text-white/60 overflow-x-auto">
+        <pre className={`p-4 text-xs leading-relaxed ${t.muted} overflow-x-auto`}>
 {`export default (router) => {
-  router.get('/api/users', UserController.index)
-  router.post('/api/users', auth, UserController.create)
+  router.get('/users', UserController.index)
+  router.post('/users', auth, UserController.create)
 }`}
         </pre>
       </section>
 
-      <p className="text-center text-xs text-white/20">BasicBen v0.1.0</p>
+      <p className={`text-center text-xs ${t.subtle}`}>BasicBen v0.1.0</p>
     </div>
   )
 }
 
-function Auth({ mode, setUser, setView }) {
+function Auth({ mode, setUser, setView, t }) {
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -158,7 +165,6 @@ function Auth({ mode, setUser, setView }) {
     e.preventDefault()
     setError('')
     setLoading(true)
-
     try {
       const res = await fetch(`/api/auth/${mode}`, {
         method: 'POST',
@@ -167,7 +173,6 @@ function Auth({ mode, setUser, setView }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || Object.values(data.errors || {})[0]?.[0] || 'Failed')
-
       localStorage.setItem('token', data.token)
       setUser(data.user)
       setView('home')
@@ -179,33 +184,33 @@ function Auth({ mode, setUser, setView }) {
   }
 
   return (
-    <div className="max-w-xs mx-auto py-12">
+    <div className="max-w-xs mx-auto py-8">
       <h1 className="text-2xl font-bold text-center mb-1">{isLogin ? 'Welcome back' : 'Create account'}</h1>
-      <p className="text-sm text-white/40 text-center mb-6">{isLogin ? 'Sign in to continue' : 'Get started for free'}</p>
+      <p className={`text-sm ${t.muted} text-center mb-6`}>{isLogin ? 'Sign in to continue' : 'Get started for free'}</p>
 
-      {error && <p className="text-xs text-red-400 text-center mb-4 p-2 bg-red-500/10 rounded-lg">{error}</p>}
+      {error && <p className="text-xs text-red-500 text-center mb-4 p-2 bg-red-500/10 rounded-lg">{error}</p>}
 
       <form onSubmit={handleSubmit} className="space-y-3">
         {!isLogin && (
           <input type="text" placeholder="Name" required value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })}
-            className="w-full px-3 py-2 text-sm rounded-lg bg-white/5 border border-white/10 placeholder-white/30 focus:outline-none focus:border-white/20" />
+            className={`w-full px-3 py-2 text-sm rounded-lg ${t.card} border ${t.border} placeholder:${t.subtle} focus:outline-none`} />
         )}
         <input type="email" placeholder="Email" required value={form.email}
           onChange={e => setForm({ ...form, email: e.target.value })}
-          className="w-full px-3 py-2 text-sm rounded-lg bg-white/5 border border-white/10 placeholder-white/30 focus:outline-none focus:border-white/20" />
+          className={`w-full px-3 py-2 text-sm rounded-lg ${t.card} border ${t.border} placeholder:${t.subtle} focus:outline-none`} />
         <input type="password" placeholder="Password" required minLength={8} value={form.password}
           onChange={e => setForm({ ...form, password: e.target.value })}
-          className="w-full px-3 py-2 text-sm rounded-lg bg-white/5 border border-white/10 placeholder-white/30 focus:outline-none focus:border-white/20" />
+          className={`w-full px-3 py-2 text-sm rounded-lg ${t.card} border ${t.border} placeholder:${t.subtle} focus:outline-none`} />
         <button type="submit" disabled={loading}
-          className="w-full py-2 text-sm font-medium bg-white text-black rounded-lg hover:bg-white/90 disabled:opacity-50 transition">
+          className={`w-full py-2 text-sm font-medium rounded-lg ${t.btn} ${t.btnHover} disabled:opacity-50 transition`}>
           {loading ? '...' : isLogin ? 'Sign in' : 'Create account'}
         </button>
       </form>
 
-      <p className="text-xs text-white/40 text-center mt-4">
+      <p className={`text-xs ${t.muted} text-center mt-4`}>
         {isLogin ? "Don't have an account? " : 'Have an account? '}
-        <button onClick={() => setView(isLogin ? 'register' : 'login')} className="text-white hover:underline">
+        <button onClick={() => setView(isLogin ? 'register' : 'login')} className="underline hover:no-underline">
           {isLogin ? 'Sign up' : 'Sign in'}
         </button>
       </p>
