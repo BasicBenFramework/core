@@ -27,6 +27,12 @@
   },
   "scripts": {
     "test": "node --test src/**/*.test.js",
+    "test:db": "node --test src/db/**/*.test.js",
+    "test:validation": "node --test src/validation/**/*.test.js",
+    "test:auth": "node --test src/auth/**/*.test.js",
+    "test:server": "node --test src/server/**/*.test.js",
+    "test:cli": "node --test src/cli/**/*.test.js",
+    "test:scaffolding": "node --test src/scaffolding/**/*.test.js",
     "test:app": "./scripts/test-app.sh"
   },
   "keywords": [

@@ -3,6 +3,8 @@
  * Simple, composable validation with async support.
  */
 
+import { db } from '../db/index.js'
+
 /**
  * Validate data against rules
  *
@@ -349,6 +351,65 @@ export const rules = {
     const afterDate = new Date(dateStr)
     if (date <= afterDate) {
       return `${field} must be after ${dateStr}`
+    }
+    return null
+  },
+
+  /**
+   * Value must be unique in database table
+   *
+   * @param {string} table - Table name
+   * @param {string} [column] - Column name (defaults to field name)
+   * @param {number|string} [exceptId] - ID to exclude (for updates)
+   *
+   * @example
+   * // Check email is unique
+   * email: [rules.unique('users')]
+   *
+   * // Check email is unique, excluding current user
+   * email: [rules.unique('users', 'email', userId)]
+   */
+  unique: (table, column, exceptId) => async (value, field) => {
+    if (isEmpty(value)) return null
+
+    const col = column || field
+    const query = await db.table(table)
+
+    query.where(col, value)
+
+    if (exceptId !== undefined) {
+      query.where('id', '!=', exceptId)
+    }
+
+    const exists = await query.exists()
+
+    if (exists) {
+      return `${field} has already been taken`
+    }
+    return null
+  },
+
+  /**
+   * Value must exist in database table
+   *
+   * @param {string} table - Table name
+   * @param {string} [column] - Column name (defaults to 'id')
+   *
+   * @example
+   * // Check user_id exists in users table
+   * user_id: [rules.exists('users')]
+   *
+   * // Check category exists by slug
+   * category: [rules.exists('categories', 'slug')]
+   */
+  exists: (table, column = 'id') => async (value, field) => {
+    if (isEmpty(value)) return null
+
+    const query = await db.table(table)
+    const exists = await query.where(column, value).exists()
+
+    if (!exists) {
+      return `${field} does not exist`
     }
     return null
   }
