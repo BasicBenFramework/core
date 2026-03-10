@@ -1,9 +1,12 @@
 /**
- * JWT helpers using node:crypto.
- * No jsonwebtoken dependency needed.
+ * Auth helpers using node:crypto.
+ * No jsonwebtoken or bcrypt dependencies needed.
  */
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
+
+// Re-export password helpers
+export { hashPassword, verifyPassword, needsRehash } from './password.js'
 
 /**
  * Sign a JWT token

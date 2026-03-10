@@ -9,7 +9,6 @@ export function DesktopNav({ user, navigate, logout }) {
   return (
     <div className="hidden sm:flex items-center gap-2">
       <NavLink onClick={() => navigate('gettingStarted')}>Docs</NavLink>
-      <NavLink onClick={() => navigate('database')}>Database</NavLink>
 
       <div className={`w-px h-5 mx-1 ${dark ? 'bg-white/20' : 'bg-black/20'}`} />
 

@@ -11,6 +11,10 @@ import { Posts } from './pages/Posts'
 import { PostForm } from './pages/PostForm'
 import { GettingStarted } from './pages/GettingStarted'
 import { Database } from './pages/Database'
+import { Routing } from './pages/Routing'
+import { Authentication } from './pages/Authentication'
+import { Validation } from './pages/Validation'
+import { Testing } from './pages/Testing'
 import { api } from './api'
 
 // Route configuration with guards
@@ -25,7 +29,11 @@ const routes = {
   '/posts/new': { view: 'postForm', component: PostForm, auth: true },
   '/posts/:id/edit': { view: 'postForm', component: PostForm, auth: true },
   '/docs': { view: 'gettingStarted', component: GettingStarted },
+  '/docs/routing': { view: 'routing', component: Routing },
   '/docs/database': { view: 'database', component: Database },
+  '/docs/authentication': { view: 'authentication', component: Authentication },
+  '/docs/validation': { view: 'validation', component: Validation },
+  '/docs/testing': { view: 'testing', component: Testing },
 }
 
 // Map view names to URL paths
@@ -39,7 +47,11 @@ const viewToPath = {
   posts: '/posts',
   postForm: (id) => id ? `/posts/${id}/edit` : '/posts/new',
   gettingStarted: '/docs',
+  routing: '/docs/routing',
   database: '/docs/database',
+  authentication: '/docs/authentication',
+  validation: '/docs/validation',
+  testing: '/docs/testing',
 }
 
 function parseUrl(pathname) {
@@ -96,7 +108,11 @@ function getPageProps(view, context) {
     case 'postForm':
       return { postId: viewData, navigate }
     case 'gettingStarted':
+    case 'routing':
     case 'database':
+    case 'authentication':
+    case 'validation':
+    case 'testing':
       return {}
     default:
       return {}

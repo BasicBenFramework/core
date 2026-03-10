@@ -1,11 +1,6 @@
 import { validate, rules } from '@basicbenframework/core/validation'
-import { signJwt, verifyJwt } from '@basicbenframework/core/auth'
+import { signJwt, verifyJwt, hashPassword, verifyPassword } from '@basicbenframework/core/auth'
 import { User } from '../models/User.js'
-import { createHash } from 'node:crypto'
-
-function hashPassword(password) {
-  return createHash('sha256').update(password).digest('hex')
-}
 
 export const AuthController = {
   async register(req, res) {
@@ -31,7 +26,7 @@ export const AuthController = {
     const user = await User.create({
       name,
       email,
-      password: hashPassword(password)
+      password: await hashPassword(password)
     })
 
     // Generate token
@@ -51,7 +46,7 @@ export const AuthController = {
     }
 
     const user = await User.findByEmail(email)
-    if (!user || user.password !== hashPassword(password)) {
+    if (!user || !(await verifyPassword(password, user.password))) {
       return res.json({ error: 'Invalid credentials' }, 401)
     }
 

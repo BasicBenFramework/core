@@ -41,13 +41,7 @@ export function MobileNav({ user, navigate, onClose, logout }) {
               onClick={() => handleNav('gettingStarted')}
               className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
             >
-              Getting Started
-            </button>
-            <button
-              onClick={() => handleNav('database')}
-              className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
-            >
-              Database
+              Docs
             </button>
           </div>
 

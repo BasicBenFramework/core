@@ -17,18 +17,30 @@ function SidebarLink({ onClick, active, children }) {
 
 export function DocsLayout({ children }) {
   const { t } = useTheme()
-  const { navigate, viewData } = useApp()
+  const { navigate, view } = useApp()
+
+  const docLinks = [
+    { view: 'gettingStarted', label: 'Getting Started' },
+    { view: 'routing', label: 'Routing' },
+    { view: 'database', label: 'Database' },
+    { view: 'authentication', label: 'Authentication' },
+    { view: 'validation', label: 'Validation' },
+    { view: 'testing', label: 'Testing' },
+  ]
 
   return (
     <div className="flex gap-8">
       <aside className="hidden md:block w-48 flex-shrink-0">
         <nav className="sticky top-20 space-y-1">
-          <SidebarLink onClick={() => navigate('gettingStarted')} active={viewData === 'gettingStarted'}>
-            Getting Started
-          </SidebarLink>
-          <SidebarLink onClick={() => navigate('database')} active={viewData === 'database'}>
-            Database
-          </SidebarLink>
+          {docLinks.map(link => (
+            <SidebarLink
+              key={link.view}
+              onClick={() => navigate(link.view)}
+              active={view === link.view}
+            >
+              {link.label}
+            </SidebarLink>
+          ))}
         </nav>
       </aside>
       <div className="flex-1 min-w-0">{children}</div>

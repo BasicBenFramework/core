@@ -14,7 +14,7 @@ export function Home({ user, navigate }) {
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-3">
           Build faster with <span className="underline decoration-2 underline-offset-4">BasicBen</span>
         </h1>
-        <p className={`${t.muted} max-w-md mx-auto mb-6`}>Full-stack React framework. Minimal dependencies.</p>
+        <p className={`${t.muted} max-w-md mx-auto mb-6`}>Full-stack React framework. Zero runtime dependencies.</p>
         <div className="flex flex-col items-center gap-4">
           <div className={`px-4 py-3 rounded-lg ${t.card} border ${t.border} font-mono text-sm`}>
             <span className={t.muted}>$</span> npx create-basicben-app my-app
@@ -24,11 +24,10 @@ export function Home({ user, navigate }) {
       </section>
 
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {[['⚡', 'Vite', 'Fast builds'], ['🔐', 'Auth', 'JWT ready'], ['🗄️', 'Database', 'SQL built-in'], ['🪶', 'Tiny', '3.7k lines']].map(([icon, title, desc]) => (
+        {[['Vite', 'Fast builds'], ['Auth', 'JWT ready'], ['Database', 'SQL built-in'], ['Zero Deps', 'No runtime deps']].map(([title, desc]) => (
           <Card key={title} className="hover:border-opacity-50">
-            <span className="text-lg">{icon}</span>
-            <p className="font-medium text-sm mt-2">{title}</p>
-            <p className={`text-xs ${t.subtle} mt-0.5`}>{desc}</p>
+            <p className="font-medium text-sm">{title}</p>
+            <p className={`text-xs ${t.subtle} mt-1`}>{desc}</p>
           </Card>
         ))}
       </section>
