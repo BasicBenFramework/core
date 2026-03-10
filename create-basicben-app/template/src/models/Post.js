@@ -1,4 +1,4 @@
-import { getDb } from 'basicben/db'
+import { getDb } from '@basicbenframework/core/db'
 
 export const Post = {
   async all() {

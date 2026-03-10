@@ -26,9 +26,26 @@ node --test src/**/*.test.js
 
 ## Testing with my-test-app
 
-Create a local test app to test the full framework:
+Create a local test app to test the full framework.
 
-### Create the test app
+### Quick setup (recommended)
+
+Run the test script to create a fresh test app with migrations:
+
+```bash
+npm run test:app
+```
+
+Then start the dev server:
+
+```bash
+cd my-test-app
+npm run dev
+```
+
+### Manual setup
+
+#### Create the test app
 
 ```bash
 node create-basicben-app/index.js my-test-app --local
@@ -56,6 +73,31 @@ npm run dev
 This starts:
 - Frontend (Vite): http://localhost:3002
 - API server: http://localhost:3001
+
+### Run migrations
+
+After `npm install`, run migrations to set up the schema:
+
+```bash
+cd my-test-app
+npm run migrate
+```
+
+To create a new migration:
+
+```bash
+npm run make:migration create_posts_table
+```
+
+Other migration commands:
+
+```bash
+npm run migrate:status     # Show migration status
+npm run migrate:rollback   # Roll back last batch
+npm run migrate:fresh      # Drop all and re-run
+```
+
+Migration files are stored in `src/database/migrations/`.
 
 ### Run app tests
 

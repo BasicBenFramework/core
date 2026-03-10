@@ -5,7 +5,7 @@
  * Customize here for websockets, custom middleware, etc.
  */
 
-import { createServer } from 'basicben/server'
+import { createServer } from '@basicbenframework/core/server'
 
 const app = await createServer()
 

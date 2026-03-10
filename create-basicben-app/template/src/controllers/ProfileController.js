@@ -1,4 +1,4 @@
-import { validate, rules } from 'basicben/validation'
+import { validate, rules } from '@basicbenframework/core/validation'
 import { User } from '../models/User.js'
 import { createHash } from 'node:crypto'
 

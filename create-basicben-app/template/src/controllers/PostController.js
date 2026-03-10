@@ -1,4 +1,4 @@
-import { validate, rules } from 'basicben/validation'
+import { validate, rules } from '@basicbenframework/core/validation'
 import { Post } from '../models/Post.js'
 
 export const PostController = {

@@ -1,4 +1,4 @@
-import { verifyJwt } from 'basicben/auth'
+import { verifyJwt } from '@basicbenframework/core/auth'
 
 export const auth = async (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '')

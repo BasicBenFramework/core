@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ThemeContext } from './components/ThemeContext'
 import { Button } from './components/Button'
 import { NavLink } from './components/NavLink'
+import { MobileMenu } from './components/MobileMenu'
 import { Home } from './pages/Home'
 import { Auth } from './pages/Auth'
 import { Feed } from './pages/Feed'
@@ -9,6 +10,7 @@ import { FeedPost } from './pages/FeedPost'
 import { Profile } from './pages/Profile'
 import { Posts } from './pages/Posts'
 import { PostForm } from './pages/PostForm'
+import { GettingStarted } from './pages/GettingStarted'
 import { api } from './api'
 
 function App() {
@@ -17,6 +19,7 @@ function App() {
   const [viewData, setViewData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [dark, setDark] = useState(true)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -56,13 +59,35 @@ function App() {
         <div className="relative max-w-3xl mx-auto px-6">
           <nav className={`flex items-center justify-between h-14 border-b ${t.border}`}>
             <button onClick={() => navigate('home')} className="font-semibold hover:opacity-70 transition">BasicBen</button>
-            <div className="flex items-center gap-2">
+
+            {/* Desktop Navigation */}
+            <div className="hidden sm:flex items-center gap-2">
               <NavLink onClick={() => navigate('feed')}>Feed</NavLink>
-              <button onClick={() => setDark(!dark)} className={`p-2 rounded-lg ${t.card} transition`}>{dark ? '☀️' : '🌙'}</button>
+              <NavLink onClick={() => navigate('gettingStarted')}>Docs</NavLink>
+
+              {/* Separator */}
+              <div className={`w-px h-5 mx-1 ${dark ? 'bg-white/20' : 'bg-black/20'}`} />
+
+              <button
+                onClick={() => setDark(!dark)}
+                className={`p-2 rounded-lg ${t.card} transition`}
+                aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {dark ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
+
               {user ? (
                 <>
-                  <NavLink onClick={() => navigate('posts')} className="hidden sm:block">My Posts</NavLink>
-                  <NavLink onClick={() => navigate('profile')} className="hidden sm:block">Profile</NavLink>
+                  <NavLink onClick={() => navigate('posts')}>My Posts</NavLink>
+                  <NavLink onClick={() => navigate('profile')}>Profile</NavLink>
                   <Button variant="secondary" onClick={logout} className="px-3 py-1.5">Log out</Button>
                 </>
               ) : (
@@ -71,6 +96,34 @@ function App() {
                   <Button onClick={() => navigate('register')} className="px-3 py-1.5">Get started</Button>
                 </>
               )}
+            </div>
+
+            {/* Mobile Navigation */}
+            <div className="flex sm:hidden items-center gap-2">
+              <button
+                onClick={() => setDark(!dark)}
+                className={`p-2 rounded-lg ${t.card} transition`}
+                aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {dark ? (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className={`p-2 rounded-lg ${t.card} transition`}
+                aria-label="Open menu"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
             </div>
           </nav>
 
@@ -83,8 +136,19 @@ function App() {
             {view === 'profile' && user && <Profile user={user} setUser={setUser} />}
             {view === 'posts' && user && <Posts navigate={navigate} />}
             {view === 'postForm' && user && <PostForm postId={viewData} navigate={navigate} />}
+            {view === 'gettingStarted' && <GettingStarted />}
           </main>
         </div>
+
+        {/* Mobile Menu Overlay */}
+        {mobileMenuOpen && (
+          <MobileMenu
+            user={user}
+            navigate={navigate}
+            onClose={() => setMobileMenuOpen(false)}
+            logout={logout}
+          />
+        )}
       </div>
     </ThemeContext.Provider>
   )

@@ -1,5 +1,5 @@
-import { validate, rules } from 'basicben/validation'
-import { signJwt, verifyJwt } from 'basicben/auth'
+import { validate, rules } from '@basicbenframework/core/validation'
+import { signJwt, verifyJwt } from '@basicbenframework/core/auth'
 import { User } from '../models/User.js'
 import { createHash } from 'node:crypto'
 

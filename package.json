@@ -26,7 +26,8 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "test": "node --test src/**/*.test.js"
+    "test": "node --test src/**/*.test.js",
+    "test:app": "./scripts/test-app.sh"
   },
   "keywords": [
     "react",

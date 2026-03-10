@@ -93,10 +93,17 @@ async function main() {
       dev: 'basicben dev',
       build: 'basicben build',
       start: 'basicben start',
-      test: 'basicben test'
+      test: 'basicben test',
+      migrate: 'basicben migrate',
+      'migrate:rollback': 'basicben migrate:rollback',
+      'migrate:fresh': 'basicben migrate:fresh',
+      'migrate:status': 'basicben migrate:status',
+      'make:migration': 'basicben make:migration',
+      'make:controller': 'basicben make:controller',
+      'make:model': 'basicben make:model'
     },
     dependencies: {
-      basicben: basicbenDep,
+      '@basicbenframework/core': basicbenDep,
       react: '^18.2.0',
       'react-dom': '^18.2.0'
     },
