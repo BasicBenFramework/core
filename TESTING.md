@@ -1,36 +1,124 @@
 # Testing BasicBen
 
-## Testing the Validation Module
-
-The validation module (`src/validation/`) uses Node's built-in test runner.
-
-### Run validation tests
+## Quick Start
 
 ```bash
-node --test src/validation/index.test.js
+# Run all tests
+npm test
+
+# Run tests for a specific module
+npm run test:db
+npm run test:validation
+npm run test:auth
+npm run test:server
+npm run test:cli
+npm run test:scaffolding
 ```
 
-### Run with verbose output
+---
+
+## Test Modules
+
+### Database (`src/db/`)
 
 ```bash
-node --test --test-reporter spec src/validation/index.test.js
+npm run test:db
 ```
 
-### Run all framework tests
+Tests for:
+- SQLite adapter
+- PostgreSQL adapter
+- Turso, PlanetScale, Neon adapters (skipped if not configured)
+- QueryBuilder (fluent API)
+- Grammar (SQL escaping/validation)
+- Seeder
+
+### Validation (`src/validation/`)
 
 ```bash
-node --test src/**/*.test.js
+npm run test:validation
+```
+
+Tests for:
+- Core `validate()` function
+- Built-in rules (required, email, min, max, etc.)
+- Custom rules
+- Database rules (unique, exists)
+
+### Auth (`src/auth/`)
+
+```bash
+npm run test:auth
+```
+
+Tests for:
+- JWT signing and verification
+- Password hashing
+
+### Server (`src/server/`)
+
+```bash
+npm run test:server
+```
+
+Tests for:
+- Router
+- File-based routing
+
+### CLI (`src/cli/`)
+
+```bash
+npm run test:cli
+```
+
+Tests for:
+- Argument parser
+
+### Scaffolding (`src/scaffolding/`)
+
+```bash
+npm run test:scaffolding
+```
+
+Tests for:
+- File generation from stubs
+- Name transformations
+
+---
+
+## Running Tests
+
+### All tests
+
+```bash
+npm test
+```
+
+### With verbose output
+
+```bash
+node --test --test-reporter spec src/**/*.test.js
+```
+
+### Specific test file
+
+```bash
+node --test src/db/QueryBuilder.test.js
+```
+
+### With coverage
+
+```bash
+node --test --experimental-test-coverage src/**/*.test.js
 ```
 
 ---
 
 ## Testing with my-test-app
 
-Create a local test app to test the full framework.
+Create a local test app to test the full framework integration.
 
 ### Quick setup (recommended)
-
-Run the test script to create a fresh test app with migrations:
 
 ```bash
 npm run test:app
@@ -45,81 +133,101 @@ npm run dev
 
 ### Manual setup
 
-#### Create the test app
-
 ```bash
+# Create test app with local framework link
 node create-basicben-app/index.js my-test-app --local
+
+cd my-test-app
+npm install
+npm run migrate
+npm run seed        # Populate with sample data
+npm run dev
 ```
 
-The `--local` flag links to the local framework instead of npm.
+### Test credentials
+
+After seeding:
+- Email: `admin@example.com` or `test@example.com`
+- Password: `password123`
 
 ### Configure ports (optional)
 
-Edit `my-test-app/.env` to change default ports:
+Edit `my-test-app/.env`:
 
 ```env
 PORT=3001              # API server
 VITE_PORT=3002         # Frontend dev server
 ```
 
-### Install and run
-
-```bash
-cd my-test-app
-npm install
-npm run dev
-```
-
-This starts:
-- Frontend (Vite): http://localhost:3002
-- API server: http://localhost:3001
-
-### Run migrations
-
-After `npm install`, run migrations to set up the schema:
-
-```bash
-cd my-test-app
-npm run migrate
-```
-
-To create a new migration:
-
-```bash
-npm run make:migration create_posts_table
-```
-
-Other migration commands:
-
-```bash
-npm run migrate:status     # Show migration status
-npm run migrate:rollback   # Roll back last batch
-npm run migrate:fresh      # Drop all and re-run
-```
-
-Migration files are stored in `src/database/migrations/`.
-
-### Run app tests
-
-```bash
-cd my-test-app
-npm test
-```
-
 ### Clean up
-
-The `my-test-app/` directory is gitignored. Delete it when done:
 
 ```bash
 rm -rf my-test-app
 ```
 
+The `my-test-app/` directory is gitignored.
+
 ---
 
-## Test Coverage
+## Database Adapter Tests
 
-To add coverage reporting, run:
+Adapter tests are skipped unless the database is configured:
+
+| Adapter | Environment Variables |
+|---------|----------------------|
+| SQLite | None (uses local file) |
+| PostgreSQL | `DATABASE_URL` |
+| Turso | `TURSO_URL`, `TURSO_AUTH_TOKEN` |
+| PlanetScale | `PLANETSCALE_URL` or `PLANETSCALE_HOST` |
+| Neon | `NEON_URL` |
+
+To run adapter tests:
 
 ```bash
-node --test --experimental-test-coverage src/**/*.test.js
+# Set environment variables
+export TURSO_URL=libsql://your-db.turso.io
+export TURSO_AUTH_TOKEN=your-token
+
+# Run tests
+npm run test:db
+```
+
+---
+
+## Writing Tests
+
+Tests use Node's built-in test runner:
+
+```javascript
+import { test, describe, before, after } from 'node:test'
+import assert from 'node:assert'
+
+describe('MyModule', () => {
+  test('does something', async () => {
+    const result = await myFunction()
+    assert.strictEqual(result, expected)
+  })
+})
+```
+
+### Test file naming
+
+- Place tests next to source files: `module.js` → `module.test.js`
+- Or in a `__tests__/` directory
+
+### Async tests
+
+```javascript
+test('async operation', async () => {
+  const result = await asyncFunction()
+  assert.ok(result)
+})
+```
+
+### Skipping tests
+
+```javascript
+describe('Feature', { skip: !featureAvailable }, () => {
+  // Tests only run if featureAvailable is true
+})
 ```
