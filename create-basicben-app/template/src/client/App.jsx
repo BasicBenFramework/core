@@ -11,6 +11,7 @@ import { Profile } from './pages/Profile'
 import { Posts } from './pages/Posts'
 import { PostForm } from './pages/PostForm'
 import { GettingStarted } from './pages/GettingStarted'
+import { Database } from './pages/Database'
 import { api } from './api'
 
 function App() {
@@ -63,6 +64,7 @@ function App() {
             {/* Desktop Navigation */}
             <div className="hidden sm:flex items-center gap-2">
               <NavLink onClick={() => navigate('gettingStarted')}>Docs</NavLink>
+              <NavLink onClick={() => navigate('database')}>Database</NavLink>
 
               {/* Separator */}
               <div className={`w-px h-5 mx-1 ${dark ? 'bg-white/20' : 'bg-black/20'}`} />
@@ -137,6 +139,7 @@ function App() {
             {view === 'posts' && user && <Posts navigate={navigate} />}
             {view === 'postForm' && user && <PostForm postId={viewData} navigate={navigate} />}
             {view === 'gettingStarted' && <GettingStarted />}
+            {view === 'database' && <Database />}
           </main>
         </div>
 
