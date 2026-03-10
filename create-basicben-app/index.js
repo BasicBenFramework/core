@@ -116,7 +116,10 @@ async function main() {
   const appKey = generateAppKey()
   const envContent = `# Application
 APP_KEY=${appKey}
-PORT=3001
+
+# Server Ports
+PORT=3001              # API server
+VITE_PORT=3000         # Frontend dev server
 
 # Database (uncomment one)
 # DATABASE_URL=./data.db
