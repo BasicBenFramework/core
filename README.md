@@ -540,7 +540,7 @@ BasicBen is early. Contributions, issues, and ideas are welcome.
 
 ```bash
 git clone https://github.com/BasicBenFramework/basicben-framework
-cd basicben
+cd basicben-framework
 npm install
 npm run dev
 ```
