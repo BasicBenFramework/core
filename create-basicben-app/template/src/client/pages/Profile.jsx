@@ -1,5 +1,9 @@
 import { useState } from 'react'
-import { PageHeader, Card, Input, Button, Alert } from '../components'
+import { PageHeader } from '../components/PageHeader'
+import { Card } from '../components/Card'
+import { Input } from '../components/Input'
+import { Button } from '../components/Button'
+import { Alert } from '../components/Alert'
 import { api } from '../api'
 
 export function Profile({ user, setUser }) {

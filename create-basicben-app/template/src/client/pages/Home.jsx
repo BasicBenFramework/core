@@ -1,4 +1,7 @@
-import { useTheme, Card, Button, Avatar } from '../components'
+import { useTheme } from '../components/ThemeContext'
+import { Card } from '../components/Card'
+import { Button } from '../components/Button'
+import { Avatar } from '../components/Avatar'
 
 export function Home({ user, navigate }) {
   const { t } = useTheme()

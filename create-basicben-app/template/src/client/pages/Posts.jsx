@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useTheme, PageHeader, Card, Button, Loading, Empty } from '../components'
+import { useTheme } from '../components/ThemeContext'
+import { PageHeader } from '../components/PageHeader'
+import { Card } from '../components/Card'
+import { Button } from '../components/Button'
+import { Loading } from '../components/Loading'
+import { Empty } from '../components/Empty'
 import { api } from '../api'
 
 export function Posts({ navigate }) {

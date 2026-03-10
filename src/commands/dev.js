@@ -6,8 +6,11 @@
 
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { bold, cyan, green, yellow, dim, red } from '../cli/colors.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /**
  * Load .env file into process.env
@@ -43,13 +46,8 @@ export async function run(args, flags) {
 
   console.log(`\n${bold('BasicBen')} ${dim('dev')}\n`)
 
-  // Check for required files
+  // Find server entry (uses framework default if no custom server)
   const serverEntry = findServerEntry(cwd)
-  if (!serverEntry) {
-    console.error(`${red('Error:')} No server entry point found.`)
-    console.error(`${dim('Expected: src/server/index.js or src/index.js')}\n`)
-    process.exit(1)
-  }
 
   const viteConfig = findViteConfig(cwd)
 
@@ -89,6 +87,7 @@ export async function run(args, flags) {
 
 /**
  * Find server entry point
+ * Returns default framework entry if no custom server exists
  */
 function findServerEntry(cwd) {
   const candidates = [
@@ -106,7 +105,8 @@ function findServerEntry(cwd) {
     }
   }
 
-  return null
+  // No custom server found, use framework default
+  return resolve(__dirname, '../server/default-entry.js')
 }
 
 /**

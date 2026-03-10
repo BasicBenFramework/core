@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useTheme, Card, BackLink, Loading } from '../components'
+import { useTheme } from '../components/ThemeContext'
+import { Card } from '../components/Card'
+import { BackLink } from '../components/BackLink'
+import { Loading } from '../components/Loading'
 import { api } from '../api'
 
 export function FeedPost({ postId, navigate }) {

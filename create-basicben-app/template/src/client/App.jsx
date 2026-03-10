@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react'
-import { ThemeContext, useTheme, Button, NavLink } from './components'
-import { Home, Auth, Feed, FeedPost, Profile, Posts, PostForm } from './pages'
+import { ThemeContext } from './components/ThemeContext'
+import { Button } from './components/Button'
+import { NavLink } from './components/NavLink'
+import { Home } from './pages/Home'
+import { Auth } from './pages/Auth'
+import { Feed } from './pages/Feed'
+import { FeedPost } from './pages/FeedPost'
+import { Profile } from './pages/Profile'
+import { Posts } from './pages/Posts'
+import { PostForm } from './pages/PostForm'
 import { api } from './api'
 
 function App() {

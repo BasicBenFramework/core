@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import { useTheme, Input, Button, Alert } from '../components'
+import { useTheme } from '../components/ThemeContext'
+import { Input } from '../components/Input'
+import { Button } from '../components/Button'
+import { Alert } from '../components/Alert'
 import { api } from '../api'
 
 export function Auth({ mode, setUser, navigate }) {

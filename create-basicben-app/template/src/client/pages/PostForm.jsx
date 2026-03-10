@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react'
-import { PageHeader, BackLink, Input, Textarea, Button, Alert, Loading } from '../components'
+import { PageHeader } from '../components/PageHeader'
+import { BackLink } from '../components/BackLink'
+import { Input } from '../components/Input'
+import { Textarea } from '../components/Textarea'
+import { Button } from '../components/Button'
+import { Alert } from '../components/Alert'
+import { Loading } from '../components/Loading'
 import { api } from '../api'
 
 export function PostForm({ postId, navigate }) {

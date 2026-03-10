@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
-import { PageHeader, PostCard, Loading, Empty } from '../components'
+import { PageHeader } from '../components/PageHeader'
+import { PostCard } from '../components/PostCard'
+import { Loading } from '../components/Loading'
+import { Empty } from '../components/Empty'
 import { api } from '../api'
 
 export function Feed({ navigate }) {

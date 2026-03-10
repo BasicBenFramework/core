@@ -89,9 +89,24 @@ async function prepareServer(cwd) {
   }
 
   // Create production server entry
-  const serverEntry = `
+  const hasCustomServer = existsSync(resolve(cwd, 'src/server/index.js'))
+
+  const serverEntry = hasCustomServer
+    ? `
 import { createServer } from './server/index.js'
-import { serveStatic } from './server/static.js'
+
+const app = await createServer({
+  static: { dir: '../client' }
+})
+
+const port = process.env.PORT || 3000
+
+app.listen(port, () => {
+  console.log(\`Server running at http://localhost:\${port}\`)
+})
+`.trim()
+    : `
+import { createServer } from 'basicben/server'
 
 const app = await createServer({
   static: { dir: '../client' }

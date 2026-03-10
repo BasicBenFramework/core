@@ -1,8 +1,8 @@
 /**
- * Server entry point
+ * Server entry point (optional)
  *
- * This file is automatically loaded by BasicBen.
- * You can customize server setup here.
+ * Delete this file to use the default server.
+ * Customize here for websockets, custom middleware, etc.
  */
 
 import { createServer } from 'basicben/server'
