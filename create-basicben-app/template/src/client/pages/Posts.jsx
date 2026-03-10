@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from '@basicbenframework/core/client'
 import { useTheme } from '../components/ThemeContext'
 import { PageHeader } from '../components/PageHeader'
 import { Card } from '../components/Card'
@@ -6,10 +7,10 @@ import { Button } from '../components/Button'
 import { Loading } from '../components/Loading'
 import { Empty } from '../components/Empty'
 import { api } from '../api'
-import { AppLayout } from '../layouts/AppLayout'
 import { useToast } from '../contexts/ToastContext'
 
-export function Posts({ navigate }) {
+export function Posts() {
+  const navigate = useNavigate()
   const { t } = useTheme()
   const toast = useToast()
   const [posts, setPosts] = useState([])
@@ -34,7 +35,7 @@ export function Posts({ navigate }) {
 
   return (
     <div>
-      <PageHeader title="My Posts" action={<Button onClick={() => navigate('postForm')}>New Post</Button>} />
+      <PageHeader title="My Posts" action={<Button onClick={() => navigate('/posts/new')}>New Post</Button>} />
       {posts.length === 0 ? (
         <Empty>No posts yet. Create your first one!</Empty>
       ) : (
@@ -46,7 +47,7 @@ export function Posts({ navigate }) {
                 <p className={`text-xs ${t.subtle}`}>{post.published ? 'Published' : 'Draft'} &bull; {new Date(post.created_at).toLocaleDateString()}</p>
               </div>
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => navigate('postForm', post.id)} className="text-xs px-3 py-1.5">Edit</Button>
+                <Button variant="secondary" onClick={() => navigate(`/posts/${post.id}/edit`)} className="text-xs px-3 py-1.5">Edit</Button>
                 <Button variant="danger" onClick={() => deletePost(post.id)} className="text-xs px-3 py-1.5">Delete</Button>
               </div>
             </Card>
@@ -56,5 +57,3 @@ export function Posts({ navigate }) {
     </div>
   )
 }
-
-Posts.layout = page => <AppLayout>{page}</AppLayout>

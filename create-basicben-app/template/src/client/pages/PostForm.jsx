@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate, useParams } from '@basicbenframework/core/client'
 import { PageHeader } from '../components/PageHeader'
 import { BackLink } from '../components/BackLink'
 import { Input } from '../components/Input'
@@ -6,10 +7,12 @@ import { Textarea } from '../components/Textarea'
 import { Button } from '../components/Button'
 import { Loading } from '../components/Loading'
 import { api } from '../api'
-import { AppLayout } from '../layouts/AppLayout'
 import { useToast } from '../contexts/ToastContext'
 
-export function PostForm({ postId, navigate }) {
+export function PostForm() {
+  const navigate = useNavigate()
+  const params = useParams()
+  const postId = params.id
   const toast = useToast()
   const [form, setForm] = useState({ title: '', content: '', published: false })
   const [loading, setLoading] = useState(!!postId)
@@ -21,7 +24,7 @@ export function PostForm({ postId, navigate }) {
         .then(data => setForm({ title: data.post.title, content: data.post.content, published: !!data.post.published }))
         .catch(err => {
           toast.error(err.message)
-          navigate('posts')
+          navigate('/posts')
         })
         .finally(() => setLoading(false))
     }
@@ -38,7 +41,7 @@ export function PostForm({ postId, navigate }) {
         await api('/api/posts', { method: 'POST', body: JSON.stringify(form) })
         toast.success('Post created')
       }
-      navigate('posts')
+      navigate('/posts')
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -50,7 +53,7 @@ export function PostForm({ postId, navigate }) {
 
   return (
     <div className="max-w-xl mx-auto">
-      <BackLink onClick={() => navigate('posts')}>Back to posts</BackLink>
+      <BackLink onClick={() => navigate('/posts')}>Back to posts</BackLink>
       <PageHeader title={postId ? 'Edit Post' : 'New Post'} />
       <form onSubmit={handleSubmit} className="space-y-4 mt-4">
         <Input placeholder="Title" required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />
@@ -64,5 +67,3 @@ export function PostForm({ postId, navigate }) {
     </div>
   )
 }
-
-PostForm.layout = page => <AppLayout>{page}</AppLayout>

@@ -424,8 +424,6 @@ await db.transaction(async (tx) => {
     </div>
   )
 }
-
-Database.layout = [
   page => <AppLayout>{page}</AppLayout>,
   page => <DocsLayout>{page}</DocsLayout>,
 ]

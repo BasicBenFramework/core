@@ -234,8 +234,6 @@ export default [
     </div>
   )
 }
-
-Authentication.layout = [
   page => <AppLayout>{page}</AppLayout>,
   page => <DocsLayout>{page}</DocsLayout>,
 ]

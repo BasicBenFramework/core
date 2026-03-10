@@ -134,8 +134,6 @@ export function GettingStarted() {
     </div>
   )
 }
-
-GettingStarted.layout = [
   page => <AppLayout>{page}</AppLayout>,
   page => <DocsLayout>{page}</DocsLayout>,
 ]

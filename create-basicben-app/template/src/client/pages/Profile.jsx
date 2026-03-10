@@ -1,15 +1,16 @@
 import { useState } from 'react'
+import { useAuth } from '@basicbenframework/core/client'
 import { PageHeader } from '../components/PageHeader'
 import { Card } from '../components/Card'
 import { Input } from '../components/Input'
 import { Button } from '../components/Button'
 import { api } from '../api'
-import { AppLayout } from '../layouts/AppLayout'
 import { useToast } from '../contexts/ToastContext'
 
-export function Profile({ user, setUser }) {
+export function Profile() {
+  const { user, setUser } = useAuth()
   const toast = useToast()
-  const [form, setForm] = useState({ name: user.name, email: user.email })
+  const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '' })
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '' })
   const [loading, setLoading] = useState(false)
 
@@ -65,5 +66,3 @@ export function Profile({ user, setUser }) {
     </div>
   )
 }
-
-Profile.layout = page => <AppLayout>{page}</AppLayout>

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from '@basicbenframework/core/client'
 import { PageHeader } from '../components/PageHeader'
 import { PostCard } from '../components/PostCard'
 import { Loading } from '../components/Loading'
 import { Empty } from '../components/Empty'
 import { api } from '../api'
-import { AppLayout } from '../layouts/AppLayout'
 
-export function Feed({ navigate }) {
+export function Feed() {
+  const navigate = useNavigate()
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -24,12 +25,10 @@ export function Feed({ navigate }) {
       ) : (
         <div className="space-y-4">
           {posts.map(post => (
-            <PostCard key={post.id} post={post} onClick={() => navigate('feedPost', post.id)} showAuthor />
+            <PostCard key={post.id} post={post} onClick={() => navigate(`/feed/${post.id}`)} showAuthor />
           ))}
         </div>
       )}
     </div>
   )
 }
-
-Feed.layout = page => <AppLayout>{page}</AppLayout>

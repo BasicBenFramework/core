@@ -1,30 +1,34 @@
 import { useState } from 'react'
+import { useAuth, useNavigate, usePath } from '@basicbenframework/core/client'
 import { useTheme } from '../components/ThemeContext'
 import { Input } from '../components/Input'
 import { Button } from '../components/Button'
 import { api } from '../api'
-import { AuthLayout } from '../layouts/AuthLayout'
 import { useToast } from '../contexts/ToastContext'
 
-export function Auth({ mode, setUser, navigate }) {
+export function Auth() {
+  const { setUser } = useAuth()
+  const navigate = useNavigate()
+  const path = usePath()
   const { t } = useTheme()
   const toast = useToast()
   const [form, setForm] = useState({ name: '', email: '', password: '' })
   const [loading, setLoading] = useState(false)
-  const isLogin = mode === 'login'
+  const isLogin = path === '/login'
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
     try {
-      const data = await api(`/api/auth/${mode}`, {
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register'
+      const data = await api(endpoint, {
         method: 'POST',
         body: JSON.stringify(isLogin ? { email: form.email, password: form.password } : form)
       })
       localStorage.setItem('token', data.token)
       setUser(data.user)
       toast.success(isLogin ? 'Welcome back!' : 'Account created!')
-      navigate('home')
+      navigate('/')
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -44,10 +48,8 @@ export function Auth({ mode, setUser, navigate }) {
       </form>
       <p className={`text-xs ${t.muted} text-center mt-4`}>
         {isLogin ? "Don't have an account? " : 'Have an account? '}
-        <button onClick={() => navigate(isLogin ? 'register' : 'login')} className="underline hover:no-underline">{isLogin ? 'Sign up' : 'Sign in'}</button>
+        <button onClick={() => navigate(isLogin ? '/register' : '/login')} className="underline hover:no-underline">{isLogin ? 'Sign up' : 'Sign in'}</button>
       </p>
     </div>
   )
 }
-
-Auth.layout = page => <AuthLayout>{page}</AuthLayout>

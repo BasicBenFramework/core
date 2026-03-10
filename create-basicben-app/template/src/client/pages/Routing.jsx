@@ -205,8 +205,6 @@ export const show = async (req, res) => {
     </div>
   )
 }
-
-Routing.layout = [
   page => <AppLayout>{page}</AppLayout>,
   page => <DocsLayout>{page}</DocsLayout>,
 ]

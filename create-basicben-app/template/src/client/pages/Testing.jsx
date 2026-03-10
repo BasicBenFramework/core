@@ -249,8 +249,6 @@ All files |   85.71 |    78.26 |   90.00 |   85.71 |
     </div>
   )
 }
-
-Testing.layout = [
   page => <AppLayout>{page}</AppLayout>,
   page => <DocsLayout>{page}</DocsLayout>,
 ]

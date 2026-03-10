@@ -18,6 +18,7 @@
   "exports": {
     ".": "./src/index.js",
     "./server": "./src/server/index.js",
+    "./client": "./src/client/index.js",
     "./validation": "./src/validation/index.js",
     "./auth": "./src/auth/jwt.js",
     "./db": "./src/db/index.js"
