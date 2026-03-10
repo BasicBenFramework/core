@@ -62,7 +62,6 @@ function App() {
 
             {/* Desktop Navigation */}
             <div className="hidden sm:flex items-center gap-2">
-              <NavLink onClick={() => navigate('feed')}>Feed</NavLink>
               <NavLink onClick={() => navigate('gettingStarted')}>Docs</NavLink>
 
               {/* Separator */}
@@ -86,6 +85,7 @@ function App() {
 
               {user ? (
                 <>
+                  <NavLink onClick={() => navigate('feed')}>Feed</NavLink>
                   <NavLink onClick={() => navigate('posts')}>My Posts</NavLink>
                   <NavLink onClick={() => navigate('profile')}>Profile</NavLink>
                   <Button variant="secondary" onClick={logout} className="px-3 py-1.5">Log out</Button>

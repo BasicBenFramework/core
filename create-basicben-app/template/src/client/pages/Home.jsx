@@ -14,9 +14,11 @@ export function Home({ user, navigate }) {
           Build faster with <span className="underline decoration-2 underline-offset-4">BasicBen</span>
         </h1>
         <p className={`${t.muted} max-w-md mx-auto mb-6`}>Full-stack React framework. Minimal dependencies.</p>
-        <div className="flex justify-center gap-3">
-          <Button onClick={() => navigate('feed')}>View Feed</Button>
-          <code className={`px-4 py-2 text-sm rounded-full ${t.card} ${t.muted} border ${t.border}`}>npx create-basicben-app</code>
+        <div className="flex flex-col items-center gap-4">
+          <div className={`px-4 py-3 rounded-lg ${t.card} border ${t.border} font-mono text-sm`}>
+            <span className={t.muted}>$</span> npx create-basicben-app my-app
+          </div>
+          <Button onClick={() => navigate('gettingStarted')}>Getting Started</Button>
         </div>
       </section>
 

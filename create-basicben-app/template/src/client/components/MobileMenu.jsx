@@ -38,12 +38,6 @@ export function MobileMenu({ user, navigate, onClose, logout }) {
               Home
             </button>
             <button
-              onClick={() => handleNav('feed')}
-              className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
-            >
-              Feed
-            </button>
-            <button
               onClick={() => handleNav('gettingStarted')}
               className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
             >
@@ -56,6 +50,12 @@ export function MobileMenu({ user, navigate, onClose, logout }) {
               <div className={`my-4 border-t ${t.border}`} />
               <p className={`px-4 py-2 text-xs font-medium uppercase tracking-wider ${t.muted}`}>Account</p>
               <div className="space-y-1">
+                <button
+                  onClick={() => handleNav('feed')}
+                  className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
+                >
+                  Feed
+                </button>
                 <button
                   onClick={() => handleNav('posts')}
                   className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
