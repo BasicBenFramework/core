@@ -5,13 +5,29 @@ import { PageHeader } from '../components/PageHeader'
 export function GettingStarted() {
   const { t } = useTheme()
 
-  const commands = [
+  const devCommands = [
     { cmd: 'npm run dev', desc: 'Start development server' },
     { cmd: 'npm run build', desc: 'Build for production' },
-    { cmd: 'npm run make:controller', desc: 'Generate a new controller' },
-    { cmd: 'npm run make:model', desc: 'Generate a new model' },
+    { cmd: 'npm run build -- --static', desc: 'Build client only (static hosts)' },
+    { cmd: 'npm run start', desc: 'Run production server' },
+    { cmd: 'npm run test', desc: 'Run tests with Vitest' },
+  ]
+
+  const makeCommands = [
+    { cmd: 'npm run make:controller', desc: 'Generate a controller' },
+    { cmd: 'npm run make:model', desc: 'Generate a model' },
+    { cmd: 'npm run make:route', desc: 'Generate a route file' },
     { cmd: 'npm run make:migration', desc: 'Generate a migration' },
+    { cmd: 'npm run make:middleware', desc: 'Generate middleware' },
+    { cmd: 'npm run make:seed', desc: 'Generate a seeder' },
+  ]
+
+  const dbCommands = [
     { cmd: 'npm run migrate', desc: 'Run pending migrations' },
+    { cmd: 'npm run migrate:rollback', desc: 'Roll back last batch' },
+    { cmd: 'npm run migrate:fresh', desc: 'Drop all and re-run' },
+    { cmd: 'npm run migrate:status', desc: 'Show migration status' },
+    { cmd: 'npm run db:seed', desc: 'Run database seeders' },
   ]
 
   return (
@@ -40,24 +56,43 @@ export function GettingStarted() {
 ├── src/
 │   ├── client/           # React frontend
 │   │   ├── components/   # Reusable components
-│   │   ├── pages/        # Page components
-│   │   ├── App.jsx       # Main app component
-│   │   └── main.jsx      # Entry point
-│   ├── server/           # Express backend
-│   │   ├── controllers/  # Route handlers
-│   │   ├── models/       # Database models
-│   │   └── routes.js     # API routes
-│   └── database/
-│       └── migrations/   # Database migrations
+│   │   └── pages/        # Page components
+│   ├── routes/           # API route files
+│   ├── controllers/      # Business logic
+│   ├── models/           # Database models
+│   └── middleware/       # Route middleware
+├── migrations/           # Database migrations
 ├── public/               # Static assets
-└── package.json`}</pre>
+└── basicben.config.js    # Framework config`}</pre>
           </div>
         </Card>
 
         <Card>
           <h2 className="text-lg font-semibold mb-4">CLI Commands</h2>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {commands.map(({ cmd, desc }) => (
+
+          <h3 className={`text-sm font-medium mb-2 ${t.muted}`}>Development</h3>
+          <div className="grid gap-2 sm:grid-cols-2 mb-4">
+            {devCommands.map(({ cmd, desc }) => (
+              <div key={cmd} className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+                <code className="text-sm font-semibold">{cmd}</code>
+                <p className={`text-xs mt-1 ${t.muted}`}>{desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <h3 className={`text-sm font-medium mb-2 ${t.muted}`}>Scaffolding</h3>
+          <div className="grid gap-2 sm:grid-cols-2 mb-4">
+            {makeCommands.map(({ cmd, desc }) => (
+              <div key={cmd} className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+                <code className="text-sm font-semibold">{cmd}</code>
+                <p className={`text-xs mt-1 ${t.muted}`}>{desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <h3 className={`text-sm font-medium mb-2 ${t.muted}`}>Database</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {dbCommands.map(({ cmd, desc }) => (
               <div key={cmd} className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
                 <code className="text-sm font-semibold">{cmd}</code>
                 <p className={`text-xs mt-1 ${t.muted}`}>{desc}</p>

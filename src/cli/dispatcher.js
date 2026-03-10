@@ -26,6 +26,11 @@ const commands = {
   'migrate:status': () => import('../commands/migrate-status.js'),
   'migrate:make': () => import('../commands/make-migration.js'), // alias
 
+  // Seeding
+  seed: () => import('../commands/seed.js'),
+  'db:seed': () => import('../commands/seed.js'), // alias
+  'make:seed': () => import('../commands/make-seed.js')
+
   // Help
   help: () => import('../commands/help.js')
 }
@@ -104,6 +109,17 @@ export const commandMeta = {
   'migrate:status': {
     description: 'Show which migrations have run',
     usage: 'basicben migrate:status'
+  },
+
+  seed: {
+    description: 'Run database seeders',
+    usage: 'basicben seed [name]',
+    example: 'basicben seed users'
+  },
+  'make:seed': {
+    description: 'Generate a new seed file',
+    usage: 'basicben make:seed <name>',
+    example: 'basicben make:seed users'
   },
 
   help: {
