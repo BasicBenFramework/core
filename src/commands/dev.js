@@ -25,11 +25,11 @@ export async function run(args, flags) {
   const viteConfig = findViteConfig(cwd)
 
   // Start Node server with --watch
-  const nodePort = flags.nodePort || process.env.API_PORT || 3001
+  const nodePort = flags.port || process.env.PORT || 3001
   const nodeProcess = startNodeServer(serverEntry, nodePort, cwd)
 
   // Start Vite dev server
-  const vitePort = flags.port || process.env.PORT || 3000
+  const vitePort = flags.vitePort || process.env.VITE_PORT || 3000
   const viteProcess = startViteServer(vitePort, nodePort, viteConfig, cwd)
 
   // Handle process cleanup
@@ -168,7 +168,7 @@ function startViteServer(port, apiPort, configPath, cwd) {
     stdio: 'inherit',
     env: {
       ...process.env,
-      VITE_API_PORT: apiPort,
+      PORT: apiPort,
       NODE_ENV: 'development'
     }
   })
