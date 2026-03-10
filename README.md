@@ -30,10 +30,11 @@ Most JS frameworks make one of two mistakes: they do too much (Next.js, Remix) o
 npx create-basicben-app my-app
 cd my-app
 npm install
+npx basicben migrate
 npx basicben dev
 ```
 
-Your app is running at `http://localhost:3000`.
+Your app is running at `http://localhost:3000` with a fully functional blog app — user auth, posts, and profiles included.
 
 ---
 
