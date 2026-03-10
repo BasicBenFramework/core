@@ -142,11 +142,13 @@ function Home({ user, t, dark }) {
           <div className={`w-2 h-2 rounded-full ${dark ? 'bg-white/20' : 'bg-black/20'}`} />
           <span className={`ml-2 text-xs ${t.subtle}`}>routes/api.js</span>
         </div>
-        <pre className={`p-4 text-xs leading-relaxed ${t.muted} overflow-x-auto`}>
-{`export default (router) => {
-  router.get('/users', UserController.index)
-  router.post('/users', auth, UserController.create)
-}`}
+        <pre className="p-4 text-xs leading-relaxed overflow-x-auto">
+          <code>
+            <span className="text-purple-400">export default</span> <span className={t.muted}>(router)</span> <span className="text-purple-400">=&gt;</span> <span className={t.subtle}>{'{'}</span>{'\n'}
+            {'  '}router.<span className="text-emerald-400">get</span><span className={t.subtle}>(</span><span className="text-amber-400">'/users'</span>, UserController.index<span className={t.subtle}>)</span>{'\n'}
+            {'  '}router.<span className="text-emerald-400">post</span><span className={t.subtle}>(</span><span className="text-amber-400">'/users'</span>, auth, UserController.create<span className={t.subtle}>)</span>{'\n'}
+            <span className={t.subtle}>{'}'}</span>
+          </code>
         </pre>
       </section>
 
