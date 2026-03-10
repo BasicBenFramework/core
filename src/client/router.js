@@ -125,13 +125,12 @@ export function createClientApp(config) {
     }
 
     // Build page element
-    const pageElement = createElement(route.component)
+    let wrapped = createElement(route.component)
 
-    // Apply layout
-    let wrapped = pageElement
+    // Apply layout: route-specific layout replaces default, or use default
     const Layout = route.layout || DefaultLayout
     if (Layout) {
-      wrapped = createElement(Layout, null, pageElement)
+      wrapped = createElement(Layout, null, wrapped)
     }
 
     // Provide context

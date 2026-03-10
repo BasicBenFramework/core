@@ -1,11 +1,14 @@
+import { useNavigate, usePath } from '@basicbenframework/core/client'
 import { useTheme } from '../components/ThemeContext'
-import { useApp } from '../contexts/AppContext'
+import { AppLayout } from './AppLayout'
 
-function SidebarLink({ onClick, active, children }) {
+function SidebarLink({ href, active, children }) {
   const { t } = useTheme()
+  const navigate = useNavigate()
+
   return (
     <button
-      onClick={onClick}
+      onClick={() => navigate(href)}
       className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition ${
         active ? `${t.card} font-medium` : `${t.muted} hover:opacity-70`
       }`}
@@ -15,17 +18,17 @@ function SidebarLink({ onClick, active, children }) {
   )
 }
 
-export function DocsLayout({ children }) {
+function DocsSidebar({ children }) {
   const { t } = useTheme()
-  const { navigate, view } = useApp()
+  const path = usePath()
 
   const docLinks = [
-    { view: 'gettingStarted', label: 'Getting Started' },
-    { view: 'routing', label: 'Routing' },
-    { view: 'database', label: 'Database' },
-    { view: 'authentication', label: 'Authentication' },
-    { view: 'validation', label: 'Validation' },
-    { view: 'testing', label: 'Testing' },
+    { href: '/docs', label: 'Getting Started' },
+    { href: '/docs/routing', label: 'Routing' },
+    { href: '/docs/database', label: 'Database' },
+    { href: '/docs/authentication', label: 'Authentication' },
+    { href: '/docs/validation', label: 'Validation' },
+    { href: '/docs/testing', label: 'Testing' },
   ]
 
   return (
@@ -34,9 +37,9 @@ export function DocsLayout({ children }) {
         <nav className="sticky top-20 space-y-1">
           {docLinks.map(link => (
             <SidebarLink
-              key={link.view}
-              onClick={() => navigate(link.view)}
-              active={view === link.view}
+              key={link.href}
+              href={link.href}
+              active={path === link.href}
             >
               {link.label}
             </SidebarLink>
@@ -45,5 +48,13 @@ export function DocsLayout({ children }) {
       </aside>
       <div className="flex-1 min-w-0">{children}</div>
     </div>
+  )
+}
+
+export function DocsLayout({ children }) {
+  return (
+    <AppLayout>
+      <DocsSidebar>{children}</DocsSidebar>
+    </AppLayout>
   )
 }

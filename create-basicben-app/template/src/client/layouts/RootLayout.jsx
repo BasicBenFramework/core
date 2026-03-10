@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ThemeContext } from '../components/ThemeContext'
+import { ToastProvider } from '../contexts/ToastContext'
 
 export function RootLayout({ children }) {
   const [dark, setDark] = useState(true)
@@ -10,13 +11,15 @@ export function RootLayout({ children }) {
 
   return (
     <ThemeContext.Provider value={{ t, dark, setDark }}>
-      <div className={`min-h-screen ${t.bg} ${t.text} transition-colors duration-300`}>
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className={`absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-[150px] ${dark ? 'bg-purple-500/10' : 'bg-purple-500/5'}`} />
-          <div className={`absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[150px] ${dark ? 'bg-blue-500/10' : 'bg-blue-500/5'}`} />
+      <ToastProvider>
+        <div className={`min-h-screen ${t.bg} ${t.text} transition-colors duration-300`}>
+          <div className="fixed inset-0 pointer-events-none overflow-hidden">
+            <div className={`absolute top-0 right-0 w-[500px] h-[500px] rounded-full blur-[150px] ${dark ? 'bg-purple-500/10' : 'bg-purple-500/5'}`} />
+            <div className={`absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full blur-[150px] ${dark ? 'bg-blue-500/10' : 'bg-blue-500/5'}`} />
+          </div>
+          <div className="relative">{children}</div>
         </div>
-        <div className="relative">{children}</div>
-      </div>
+      </ToastProvider>
     </ThemeContext.Provider>
   )
 }

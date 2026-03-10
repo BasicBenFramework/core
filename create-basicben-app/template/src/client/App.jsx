@@ -1,5 +1,6 @@
 import { createClientApp } from '@basicbenframework/core/client'
-import { RootLayout } from './layouts/RootLayout'
+import { AppLayout } from './layouts/AppLayout'
+import { AuthLayout } from './layouts/AuthLayout'
 import { DocsLayout } from './layouts/DocsLayout'
 import { Home } from './pages/Home'
 import { Auth } from './pages/Auth'
@@ -16,11 +17,11 @@ import { Validation } from './pages/Validation'
 import { Testing } from './pages/Testing'
 
 export default createClientApp({
-  layout: RootLayout,
+  layout: AppLayout,
   routes: {
     '/': Home,
-    '/login': { component: Auth, guest: true },
-    '/register': { component: Auth, guest: true },
+    '/login': { component: Auth, layout: AuthLayout, guest: true },
+    '/register': { component: Auth, layout: AuthLayout, guest: true },
     '/feed': Feed,
     '/feed/:id': FeedPost,
     '/posts': { component: Posts, auth: true },

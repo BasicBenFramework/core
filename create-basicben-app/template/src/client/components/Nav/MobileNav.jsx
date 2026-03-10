@@ -36,13 +36,13 @@ export function MobileNav({ user, navigate, onClose, logout }) {
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="space-y-1">
             <button
-              onClick={() => handleNav('home')}
+              onClick={() => handleNav('/')}
               className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
             >
               Home
             </button>
             <button
-              onClick={() => handleNav('gettingStarted')}
+              onClick={() => handleNav('/docs')}
               className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
             >
               Docs
@@ -55,19 +55,19 @@ export function MobileNav({ user, navigate, onClose, logout }) {
               <p className={`px-4 py-2 text-xs font-medium uppercase tracking-wider ${t.muted}`}>Account</p>
               <div className="space-y-1">
                 <button
-                  onClick={() => handleNav('feed')}
+                  onClick={() => handleNav('/feed')}
                   className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
                 >
                   Feed
                 </button>
                 <button
-                  onClick={() => handleNav('posts')}
+                  onClick={() => handleNav('/posts')}
                   className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
                 >
                   My Posts
                 </button>
                 <button
-                  onClick={() => handleNav('profile')}
+                  onClick={() => handleNav('/profile')}
                   className={`w-full text-left px-4 py-3 rounded-lg ${t.card} hover:opacity-80 transition`}
                 >
                   Profile
@@ -86,13 +86,13 @@ export function MobileNav({ user, navigate, onClose, logout }) {
               <div className={`my-4 border-t ${t.border}`} />
               <div className="space-y-2">
                 <button
-                  onClick={() => handleNav('login')}
+                  onClick={() => handleNav('/login')}
                   className={`w-full px-4 py-3 rounded-lg ${t.btnSecondary} transition`}
                 >
                   Sign in
                 </button>
                 <button
-                  onClick={() => handleNav('register')}
+                  onClick={() => handleNav('/register')}
                   className={`w-full px-4 py-3 rounded-lg ${t.btn} ${t.btnHover} transition`}
                 >
                   Get started

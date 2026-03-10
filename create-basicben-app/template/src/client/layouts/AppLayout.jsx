@@ -1,24 +1,22 @@
 import { useState } from 'react'
+import { useAuth, useNavigate } from '@basicbenframework/core/client'
 import { useTheme } from '../components/ThemeContext'
-import { useApp } from '../contexts/AppContext'
+import { RootLayout } from './RootLayout'
 import { DesktopNav } from '../components/Nav/DesktopNav'
 import { MobileNav } from '../components/Nav/MobileNav'
 import { DarkModeToggle } from '../components/Nav/DarkModeToggle'
 import { Logo } from '../components/Logo'
 
-export function AppLayout({ children }) {
+function AppLayoutInner({ children }) {
   const { t, dark, setDark } = useTheme()
-  const { user, navigate, logout, transitioning } = useApp()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
     <div className="max-w-3xl mx-auto px-6">
       <nav className={`flex items-center justify-between h-14 border-b ${t.border} relative`}>
-        {/* Loading indicator */}
-        {transitioning && (
-          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500 animate-pulse" />
-        )}
-        <button onClick={() => navigate('home')} className="flex items-center gap-2 font-semibold hover:opacity-70 transition">
+        <button onClick={() => navigate('/')} className="flex items-center gap-2 font-semibold hover:opacity-70 transition">
           <Logo className="w-6 h-6" />
           <span>BasicBen</span>
         </button>
@@ -50,5 +48,13 @@ export function AppLayout({ children }) {
         />
       )}
     </div>
+  )
+}
+
+export function AppLayout({ children }) {
+  return (
+    <RootLayout>
+      <AppLayoutInner>{children}</AppLayoutInner>
+    </RootLayout>
   )
 }
