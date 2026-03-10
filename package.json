@@ -1,7 +1,16 @@
 {
-  "name": "basicben",
+  "name": "@basicbenframework/core",
   "version": "0.1.0",
   "description": "A full-stack framework for React. Minimal dependencies, maximum clarity.",
+  "author": "ctmakes",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BasicBenFramework/basicben-framework.git"
+  },
+  "homepage": "https://github.com/BasicBenFramework/basicben-framework#readme",
+  "bugs": {
+    "url": "https://github.com/BasicBenFramework/basicben-framework/issues"
+  },
   "type": "module",
   "bin": {
     "basicben": "./bin/cli.js"

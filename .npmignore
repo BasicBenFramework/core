@@ -1,0 +1,17 @@
+# Test files
+*.test.js
+**/*.test.js
+
+# Development
+.claude/
+plans/
+.git/
+.gitignore
+
+# Docs (README is included by default)
+*.md
+!README.md
+
+# Misc
+.DS_Store
+*.log
