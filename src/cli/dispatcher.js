@@ -32,47 +32,81 @@ const commands = {
 
 // Command metadata for help display
 export const commandMeta = {
-  dev: { description: 'Start development server', usage: 'basicben dev' },
-  build: { description: 'Build for production', usage: 'basicben build' },
-  start: { description: 'Start production server', usage: 'basicben start' },
-  test: { description: 'Run tests with Vitest', usage: 'basicben test' },
+  dev: {
+    description: 'Start development server (Vite + Node with hot reload)',
+    usage: 'basicben dev',
+    options: {
+      '--port <port>': 'API server port (default: 3001)'
+    }
+  },
+  build: {
+    description: 'Build client and server for production',
+    usage: 'basicben build'
+  },
+  start: {
+    description: 'Start production server',
+    usage: 'basicben start',
+    options: {
+      '--port <port>': 'Server port (default: 3000)'
+    }
+  },
+  test: {
+    description: 'Run tests with Vitest',
+    usage: 'basicben test [files]',
+    options: {
+      '--watch, -w': 'Watch mode (re-run on changes)',
+      '--coverage': 'Generate coverage report',
+      '--ui': 'Open Vitest UI'
+    }
+  },
 
   'make:controller': {
-    description: 'Generate a controller',
-    usage: 'basicben make:controller <Name>'
+    description: 'Generate a controller with CRUD methods',
+    usage: 'basicben make:controller <Name>',
+    example: 'basicben make:controller User'
   },
   'make:model': {
-    description: 'Generate a model',
-    usage: 'basicben make:model <Name>'
+    description: 'Generate a model with common database methods',
+    usage: 'basicben make:model <Name>',
+    example: 'basicben make:model User'
   },
   'make:route': {
-    description: 'Generate a route file',
-    usage: 'basicben make:route <name>'
+    description: 'Generate a route file with REST endpoints',
+    usage: 'basicben make:route <name>',
+    example: 'basicben make:route users'
   },
   'make:migration': {
-    description: 'Generate a migration file',
-    usage: 'basicben make:migration <name>'
+    description: 'Generate a timestamped migration file',
+    usage: 'basicben make:migration <name>',
+    example: 'basicben make:migration create_users_table'
   },
   'make:middleware': {
-    description: 'Generate middleware',
-    usage: 'basicben make:middleware <name>'
+    description: 'Generate middleware (includes auth template)',
+    usage: 'basicben make:middleware <name>',
+    example: 'basicben make:middleware auth'
   },
 
-  migrate: { description: 'Run pending migrations', usage: 'basicben migrate' },
+  migrate: {
+    description: 'Run all pending migrations',
+    usage: 'basicben migrate'
+  },
   'migrate:rollback': {
-    description: 'Roll back last migration batch',
+    description: 'Roll back the last migration batch',
     usage: 'basicben migrate:rollback'
   },
   'migrate:fresh': {
-    description: 'Drop all tables and re-run migrations',
+    description: 'Drop all tables and re-run all migrations',
     usage: 'basicben migrate:fresh'
   },
   'migrate:status': {
-    description: 'Show migration status',
+    description: 'Show which migrations have run',
     usage: 'basicben migrate:status'
   },
 
-  help: { description: 'Show help', usage: 'basicben help [command]' }
+  help: {
+    description: 'Show help for a command',
+    usage: 'basicben help [command]'
+  }
 }
 
 export async function dispatch(command, args, flags) {

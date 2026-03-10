@@ -117,8 +117,9 @@ export async function loadConfig() {
         const module = await import(fileUrl)
         return module.default || {}
       } catch (err) {
-        console.error(`Error loading config: ${configPath}`)
-        console.error(err.message)
+        console.error(`\x1b[31mError loading config:\x1b[0m ${configPath}`)
+        console.error(`  ${err.message}`)
+        console.error(`\x1b[2mCheck your config file syntax.\x1b[0m\n`)
       }
     }
   }

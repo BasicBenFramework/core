@@ -75,4 +75,10 @@ ${bold('Usage:')}
     }
     console.log()
   }
+
+  // Add example if available
+  if (meta.example) {
+    console.log(`${bold('Example:')}`)
+    console.log(`  ${dim('$')} ${meta.example}\n`)
+  }
 }
