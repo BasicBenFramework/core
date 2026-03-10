@@ -203,7 +203,7 @@ export class Router {
   applyTo(app) {
     for (const route of this.routes) {
       const method = route.method.toLowerCase()
-      const handlers = [...route.middleware, route.handler]
+      const handlers = [...route.middleware, route.handler].map(wrapAsync)
 
       app[method](route.path, ...handlers)
     }
@@ -266,4 +266,16 @@ Router.prototype.resource = function(path, controller, options = {}) {
  */
 export function createRouter(options) {
   return new Router(options)
+}
+
+/**
+ * Wrap handler to catch async errors and pass to error handler
+ */
+function wrapAsync(fn) {
+  return (req, res, next) => {
+    const result = fn(req, res, next)
+    if (result && typeof result.catch === 'function') {
+      result.catch(next)
+    }
+  }
 }
