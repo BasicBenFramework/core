@@ -5,12 +5,33 @@
  */
 
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { bold, cyan, green, yellow, dim, red } from '../cli/colors.js'
 
+/**
+ * Load .env file into process.env
+ */
+function loadEnv(cwd) {
+  const envPath = resolve(cwd, '.env')
+  if (!existsSync(envPath)) return
+
+  const content = readFileSync(envPath, 'utf-8')
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const [key, ...rest] = trimmed.split('=')
+    if (key && rest.length) {
+      process.env[key.trim()] = rest.join('=').trim()
+    }
+  }
+}
+
 export async function run(args, flags) {
   const cwd = process.cwd()
+
+  // Load .env file
+  loadEnv(cwd)
 
   console.log(`\n${bold('BasicBen')} ${dim('dev')}\n`)
 
