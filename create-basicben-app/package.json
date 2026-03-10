@@ -1,0 +1,30 @@
+{
+  "name": "create-basicben-app",
+  "version": "0.1.0",
+  "description": "Create a new BasicBen application",
+  "type": "module",
+  "bin": {
+    "create-basicben-app": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "template"
+  ],
+  "keywords": [
+    "basicben",
+    "react",
+    "framework",
+    "fullstack",
+    "create",
+    "scaffold"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/basicben-framework"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
