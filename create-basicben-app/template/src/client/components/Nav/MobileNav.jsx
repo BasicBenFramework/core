@@ -1,4 +1,5 @@
 import { useTheme } from '../ThemeContext'
+import { Logo } from '../Logo'
 
 export function MobileNav({ user, navigate, onClose, logout }) {
   const { t } = useTheme()
@@ -17,7 +18,10 @@ export function MobileNav({ user, navigate, onClose, logout }) {
     <div className={`fixed inset-0 z-50 ${t.bg} ${t.text}`}>
       <div className="flex flex-col h-full">
         <div className={`flex items-center justify-between h-14 px-6 border-b ${t.border}`}>
-          <span className="font-semibold">Menu</span>
+          <span className="flex items-center gap-2 font-semibold">
+            <Logo className="w-5 h-5" />
+            <span>BasicBen</span>
+          </span>
           <button
             onClick={onClose}
             className={`p-2 rounded-lg ${t.card} transition`}

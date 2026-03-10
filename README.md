@@ -1,19 +1,27 @@
 # BasicBen
 
-> A full-stack framework for React. Minimal dependencies, maximum clarity.
+> Ship faster with less. A full-stack framework for React. Zero runtime dependencies.
 
-BasicBen gives you a productive, convention-driven structure for building React apps with a Node.js backend — without pulling in a bloated framework.
+BasicBen gives you a productive, convention-driven structure for building React apps with a Node.js backend — without pulling in a bloated framework or locking you into vendor ecosystems.
 
 ---
 
 ## Why BasicBen?
 
-Most JS frameworks make one of two mistakes: they do too much (Next.js, Remix) or they do nothing and leave you to wire everything yourself. BasicBen sits in the middle.
+Most JS frameworks make one of two mistakes: they do too much (Next.js, Remix) or they do nothing and leave you to wire everything yourself. BasicBen sits in the middle — conventions when you want them, escape hatches when you don't.
 
-- **Minimal dependencies** — core functionality is written from scratch. No Commander, no dotenv, no ORM.
-- **Familiar conventions** — migrations, controllers, models, and scaffolding commands.
-- **No lock-in** — just React, Node.js, and Vite. You own your stack.
-- **Escape hatches** — every convention can be overridden via `basicben.config.js`.
+| Framework | Trade-off |
+|-----------|-----------|
+| Next.js / Remix | Too much magic, vendor lock-in |
+| Express + Vite | Wire everything yourself |
+| **BasicBen** | ✅ Conventions + control |
+
+### Core Principles
+
+- **Zero runtime dependencies** — HTTP server, router, JWT auth, validation — all written from scratch using Node.js built-ins
+- **Laravel-inspired DX** — migrations, controllers, models, and scaffolding commands that feel familiar
+- **No lock-in** — just React, Node.js, and Vite. Eject anytime — your code is still your code
+- **Escape hatches** — every convention can be overridden via `basicben.config.js`
 
 ---
 
@@ -531,7 +539,7 @@ BasicBen has **zero runtime dependencies**:
 BasicBen is early. Contributions, issues, and ideas are welcome.
 
 ```bash
-git clone https://github.com/your-org/basicben
+git clone https://github.com/BasicBenFramework/basicben-framework
 cd basicben
 npm install
 npm run dev

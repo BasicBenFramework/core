@@ -4,6 +4,7 @@ import { useApp } from '../contexts/AppContext'
 import { DesktopNav } from '../components/Nav/DesktopNav'
 import { MobileNav } from '../components/Nav/MobileNav'
 import { DarkModeToggle } from '../components/Nav/DarkModeToggle'
+import { Logo } from '../components/Logo'
 
 export function AppLayout({ children }) {
   const { t, dark, setDark } = useTheme()
@@ -17,7 +18,10 @@ export function AppLayout({ children }) {
         {transitioning && (
           <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 via-blue-500 to-purple-500 animate-pulse" />
         )}
-        <button onClick={() => navigate('home')} className="font-semibold hover:opacity-70 transition">BasicBen</button>
+        <button onClick={() => navigate('home')} className="flex items-center gap-2 font-semibold hover:opacity-70 transition">
+          <Logo className="w-6 h-6" />
+          <span>BasicBen</span>
+        </button>
         <DesktopNav user={user} navigate={navigate} logout={logout} />
 
         {/* Mobile Navigation Trigger */}
