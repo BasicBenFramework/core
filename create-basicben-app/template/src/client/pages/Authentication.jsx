@@ -234,6 +234,3 @@ export default [
     </div>
   )
 }
-  page => <AppLayout>{page}</AppLayout>,
-  page => <DocsLayout>{page}</DocsLayout>,
-]

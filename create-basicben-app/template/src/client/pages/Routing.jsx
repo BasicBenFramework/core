@@ -205,6 +205,3 @@ export const show = async (req, res) => {
     </div>
   )
 }
-  page => <AppLayout>{page}</AppLayout>,
-  page => <DocsLayout>{page}</DocsLayout>,
-]

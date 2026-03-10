@@ -208,6 +208,3 @@ const result = await validate(req.body, {
     </div>
   )
 }
-  page => <AppLayout>{page}</AppLayout>,
-  page => <DocsLayout>{page}</DocsLayout>,
-]
