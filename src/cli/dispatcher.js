@@ -29,7 +29,7 @@ const commands = {
   // Seeding
   seed: () => import('../commands/seed.js'),
   'db:seed': () => import('../commands/seed.js'), // alias
-  'make:seed': () => import('../commands/make-seed.js')
+  'make:seed': () => import('../commands/make-seed.js'),
 
   // Help
   help: () => import('../commands/help.js')
