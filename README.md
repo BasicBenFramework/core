@@ -19,7 +19,7 @@ Most JS frameworks make one of two mistakes: they do too much (Next.js, Remix) o
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 20.19+
 - npm 9+
 
 ---
