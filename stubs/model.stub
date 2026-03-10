@@ -2,55 +2,76 @@
  * {{Name}} model
  */
 
-import { db } from '../db/index.js'
+import { db } from 'basicben'
 
 export const {{Name}} = {
   /**
+   * Table name
+   */
+  table: '{{tableName}}',
+
+  /**
+   * Columns that can be mass-assigned.
+   * Add column names here to allow them in create/update operations.
+   */
+  fillable: [
+    // 'name',
+    // 'email',
+  ],
+
+  /**
    * Get all {{pluralLower}}
    */
-  all: () => {
-    return db.all('SELECT * FROM {{tableName}}')
+  all: async () => {
+    return (await db.table('{{tableName}}')).get()
   },
 
   /**
    * Find {{lower}} by ID
    */
-  find: (id) => {
-    return db.get('SELECT * FROM {{tableName}} WHERE id = ?', [id])
+  find: async (id) => {
+    return (await db.table('{{tableName}}')).find(id)
   },
 
   /**
    * Create a new {{lower}}
+   *
+   * Uses mass assignment protection - only columns in `fillable` are allowed.
    */
-  create: (data) => {
-    const keys = Object.keys(data)
-    const values = Object.values(data)
-    const placeholders = keys.map(() => '?').join(', ')
-
-    return db.run(
-      `INSERT INTO {{tableName}} (${keys.join(', ')}) VALUES (${placeholders})`,
-      values
-    )
+  create: async (data) => {
+    return (await db.table('{{tableName}}'))
+      .only(...{{Name}}.fillable)
+      .insert(data)
   },
 
   /**
    * Update a {{lower}}
+   *
+   * Uses mass assignment protection - only columns in `fillable` are allowed.
    */
-  update: (id, data) => {
-    const keys = Object.keys(data)
-    const values = Object.values(data)
-    const setClause = keys.map(k => `${k} = ?`).join(', ')
-
-    return db.run(
-      `UPDATE {{tableName}} SET ${setClause} WHERE id = ?`,
-      [...values, id]
-    )
+  update: async (id, data) => {
+    return (await db.table('{{tableName}}'))
+      .only(...{{Name}}.fillable)
+      .where('id', id)
+      .update(data)
   },
 
   /**
    * Delete a {{lower}}
    */
-  destroy: (id) => {
-    return db.run('DELETE FROM {{tableName}} WHERE id = ?', [id])
+  destroy: async (id) => {
+    return (await db.table('{{tableName}}'))
+      .where('id', id)
+      .delete()
+  },
+
+  /**
+   * Query builder for custom queries.
+   *
+   * @example
+   * const active = await {{Name}}.query().where('active', true).get()
+   */
+  query: async () => {
+    return db.table('{{tableName}}')
   }
 }

@@ -4,6 +4,7 @@
  */
 
 import { loadConfig } from '../server/loader.js'
+import { QueryBuilder } from './QueryBuilder.js'
 
 let dbInstance = null
 
@@ -80,6 +81,18 @@ export const db = {
       await dbInstance.close()
       dbInstance = null
     }
+  },
+
+  /**
+   * Create a query builder for a table.
+   * Provides fluent API with mass assignment protection.
+   *
+   * @param {string} table - Table name
+   * @returns {Promise<QueryBuilder>}
+   */
+  async table(table) {
+    const conn = await getDb()
+    return new QueryBuilder(conn, table, conn.driver || 'sqlite')
   }
 }
 
@@ -89,3 +102,23 @@ export const db = {
 export function resetDb() {
   dbInstance = null
 }
+
+/**
+ * Create a query builder for a table.
+ * Provides fluent API with mass assignment protection.
+ *
+ * @param {string} table - Table name
+ * @returns {Promise<QueryBuilder>}
+ *
+ * @example
+ * const users = await query('users').where('active', true).get()
+ * await query('users').only('name', 'email').insert(req.body)
+ */
+export async function query(table) {
+  const conn = await getDb()
+  return new QueryBuilder(conn, table, conn.driver || 'sqlite')
+}
+
+// Re-export QueryBuilder and Grammar for advanced usage
+export { QueryBuilder } from './QueryBuilder.js'
+export { Grammar } from './Grammar.js'

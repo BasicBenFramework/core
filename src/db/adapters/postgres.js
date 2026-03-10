@@ -48,6 +48,11 @@ export async function createPostgresAdapter(url, options = {}) {
 
   return {
     /**
+     * Driver name for query builder
+     */
+    driver: 'postgres',
+
+    /**
      * Run INSERT/UPDATE/DELETE
      */
     async run(sql, params = []) {

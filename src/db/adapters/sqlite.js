@@ -47,6 +47,11 @@ export async function createSqliteAdapter(url, options = {}) {
 
   return {
     /**
+     * Driver name for query builder
+     */
+    driver: 'sqlite',
+
+    /**
      * Run INSERT/UPDATE/DELETE
      */
     run(sql, params = []) {
