@@ -4,8 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BasicBen App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              dark: {
+                900: '#0f0f0f',
+                800: '#1a1a1a',
+                700: '#222222',
+                600: '#333333'
+              }
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body>
+  <body class="bg-dark-900 text-white">
     <div id="root"></div>
     <script type="module" src="/src/client/main.jsx"></script>
   </body>
