@@ -1,0 +1,86 @@
+import { validate, rules } from 'basicben/validation'
+import { signJwt, verifyJwt } from 'basicben/auth'
+import { User } from '../models/User.js'
+import { createHash } from 'node:crypto'
+
+function hashPassword(password) {
+  return createHash('sha256').update(password).digest('hex')
+}
+
+export const AuthController = {
+  async register(req, res) {
+    const result = await validate(req.body, {
+      name: [rules.required, rules.string, rules.min(2)],
+      email: [rules.required, rules.email],
+      password: [rules.required, rules.min(8)]
+    })
+
+    if (result.fails()) {
+      return res.json({ errors: result.errors }, 422)
+    }
+
+    const { name, email, password } = req.body
+
+    // Check if email exists
+    const existing = await User.findByEmail(email)
+    if (existing) {
+      return res.json({ error: 'Email already registered' }, 400)
+    }
+
+    // Create user
+    const user = await User.create({
+      name,
+      email,
+      password: hashPassword(password)
+    })
+
+    // Generate token
+    const token = signJwt({ userId: user.id }, process.env.APP_KEY, { expiresIn: '7d' })
+
+    res.json({
+      user: { id: user.id, name: user.name, email: user.email },
+      token
+    })
+  },
+
+  async login(req, res) {
+    const { email, password } = req.body
+
+    if (!email || !password) {
+      return res.json({ error: 'Email and password required' }, 400)
+    }
+
+    const user = await User.findByEmail(email)
+    if (!user || user.password !== hashPassword(password)) {
+      return res.json({ error: 'Invalid credentials' }, 401)
+    }
+
+    const token = signJwt({ userId: user.id }, process.env.APP_KEY, { expiresIn: '7d' })
+
+    res.json({
+      user: { id: user.id, name: user.name, email: user.email },
+      token
+    })
+  },
+
+  async user(req, res) {
+    const token = req.headers.authorization?.replace('Bearer ', '')
+    if (!token) {
+      return res.json({ error: 'No token provided' }, 401)
+    }
+
+    const payload = verifyJwt(token, process.env.APP_KEY)
+    if (!payload) {
+      return res.json({ error: 'Invalid token' }, 401)
+    }
+
+    const user = await User.find(payload.userId)
+    if (!user) {
+      return res.json({ error: 'User not found' }, 404)
+    }
+
+    res.json({
+      user: { id: user.id, name: user.name, email: user.email }
+    })
+  }
+}
