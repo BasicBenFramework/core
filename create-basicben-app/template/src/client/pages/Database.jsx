@@ -162,10 +162,15 @@ export const down = (db) => {
         <Card>
           <h2 className="text-lg font-semibold mb-2">Seeding</h2>
           <p className={`text-sm ${t.muted} mb-4`}>
-            Seeds populate your database with initial or test data. Create a seed file in the <code>seeds/</code> directory.
+            Seeds populate your database with initial or test data. Create seed files in the <code>seeds/</code> directory. Seeds run in alphabetical order.
           </p>
 
-          <CodeBlock title="seeds/users.js">
+          <CodeBlock title="Generate a seed file">
+{`npx basicben make:seed users
+# Creates: seeds/users.js`}
+          </CodeBlock>
+
+          <CodeBlock title="seeds/01_users.js">
 {`import { db } from 'basicben'
 import { hashPassword } from 'basicben/auth'
 
@@ -188,13 +193,41 @@ export async function seed() {
 }`}
           </CodeBlock>
 
-          <CodeBlock title="Run seeds">
-{`# Run all seeds
-npx basicben seed
+          <CodeBlock title="seeds/02_posts.js">
+{`import { db } from 'basicben'
 
-# Run specific seed
-npx basicben seed users`}
+export async function seed() {
+  const user = await (await db.table('users')).first()
+
+  await (await db.table('posts')).insert({
+    user_id: user.id,
+    title: 'Welcome to BasicBen',
+    content: 'Your first blog post!',
+    published: 1
+  })
+
+  console.log('Seeded posts')
+}`}
           </CodeBlock>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+              <code className="text-sm font-semibold">npx basicben seed</code>
+              <p className={`text-xs mt-1 ${t.muted}`}>Run all seeds</p>
+            </div>
+            <div className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+              <code className="text-sm font-semibold">npx basicben seed users</code>
+              <p className={`text-xs mt-1 ${t.muted}`}>Run specific seed</p>
+            </div>
+            <div className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+              <code className="text-sm font-semibold">npx basicben make:seed</code>
+              <p className={`text-xs mt-1 ${t.muted}`}>Generate seed file</p>
+            </div>
+            <div className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+              <code className="text-sm font-semibold">npx basicben db:seed</code>
+              <p className={`text-xs mt-1 ${t.muted}`}>Alias for seed</p>
+            </div>
+          </div>
         </Card>
 
         {/* Query Builder */}
