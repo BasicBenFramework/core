@@ -29,8 +29,5 @@ export default {
   // db: {
   //   driver: 'sqlite',
   //   url: process.env.DATABASE_URL || './data.db'
-  // },
-
-  // Enable file-based routing (optional)
-  // fileRoutes: true
+  // }
 }

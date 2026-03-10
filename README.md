@@ -425,51 +425,6 @@ describe('UserController', () => {
 
 ---
 
-## File-based Routing (Optional)
-
-For Next.js-style routing, enable file-based routes in your config:
-
-```js
-// basicben.config.js
-export default {
-  fileRoutes: true
-}
-```
-
-Then create files in `src/pages/`:
-
-```
-src/pages/
-├── index.js           → GET /
-├── users/
-│   ├── index.js       → GET /users
-│   └── [id].js        → GET/PUT/DELETE /users/:id
-└── docs/
-    └── [...slug].js   → GET /docs/* (catch-all)
-```
-
-Each file exports handlers:
-
-```js
-// src/pages/users/[id].js
-export function get(req, res) {
-  res.json({ user: req.params.id })
-}
-
-export function put(req, res) {
-  // Update user
-}
-
-export function del(req, res) {
-  // Delete user (del because delete is reserved)
-}
-
-// Optional route-specific middleware
-export const middleware = [authMiddleware]
-```
-
----
-
 ## Environment Variables
 
 BasicBen uses Node 20's built-in `--env-file` support. No `dotenv` required.
@@ -518,9 +473,6 @@ export default {
     driver: 'sqlite',  // or 'postgres'
     url: process.env.DATABASE_URL || './data.db'
   },
-
-  // Enable file-based routing (default: false)
-  fileRoutes: false,
 
   // Auto-load routes from src/routes (default: true)
   autoloadRoutes: true,
