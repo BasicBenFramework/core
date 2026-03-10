@@ -36,3 +36,6 @@ coverage/
 # Internal
 plans/
 .claude/
+
+# Test apps
+my-test-app/
