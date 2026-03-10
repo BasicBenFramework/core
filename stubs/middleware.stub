@@ -1,0 +1,9 @@
+/**
+ * {{Name}} middleware
+ */
+
+export default async (req, res, next) => {
+  // Add your middleware logic here
+
+  next()
+}

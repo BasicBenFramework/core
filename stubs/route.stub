@@ -1,0 +1,13 @@
+/**
+ * {{Name}} routes
+ */
+
+import { {{Name}}Controller } from '../controllers/{{Name}}Controller.js'
+
+export default (router) => {
+  router.get('/{{pluralLower}}', {{Name}}Controller.index)
+  router.get('/{{pluralLower}}/:id', {{Name}}Controller.show)
+  router.post('/{{pluralLower}}', {{Name}}Controller.create)
+  router.put('/{{pluralLower}}/:id', {{Name}}Controller.update)
+  router.delete('/{{pluralLower}}/:id', {{Name}}Controller.destroy)
+}

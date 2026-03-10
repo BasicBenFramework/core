@@ -1,0 +1,56 @@
+/**
+ * {{Name}} model
+ */
+
+import { db } from '../db/index.js'
+
+export const {{Name}} = {
+  /**
+   * Get all {{pluralLower}}
+   */
+  all: () => {
+    return db.all('SELECT * FROM {{tableName}}')
+  },
+
+  /**
+   * Find {{lower}} by ID
+   */
+  find: (id) => {
+    return db.get('SELECT * FROM {{tableName}} WHERE id = ?', [id])
+  },
+
+  /**
+   * Create a new {{lower}}
+   */
+  create: (data) => {
+    const keys = Object.keys(data)
+    const values = Object.values(data)
+    const placeholders = keys.map(() => '?').join(', ')
+
+    return db.run(
+      `INSERT INTO {{tableName}} (${keys.join(', ')}) VALUES (${placeholders})`,
+      values
+    )
+  },
+
+  /**
+   * Update a {{lower}}
+   */
+  update: (id, data) => {
+    const keys = Object.keys(data)
+    const values = Object.values(data)
+    const setClause = keys.map(k => `${k} = ?`).join(', ')
+
+    return db.run(
+      `UPDATE {{tableName}} SET ${setClause} WHERE id = ?`,
+      [...values, id]
+    )
+  },
+
+  /**
+   * Delete a {{lower}}
+   */
+  destroy: (id) => {
+    return db.run('DELETE FROM {{tableName}} WHERE id = ?', [id])
+  }
+}
