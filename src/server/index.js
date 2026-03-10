@@ -25,6 +25,8 @@ export async function createServer(options = {}) {
   })
 
   // Core middleware
+  app.use(addResponseHelpers)
+
   if (mergedConfig.cors) {
     app.use(cors(mergedConfig.cors === true ? {} : mergedConfig.cors))
   }
