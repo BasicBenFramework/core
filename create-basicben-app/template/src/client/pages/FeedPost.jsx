@@ -4,6 +4,7 @@ import { Card } from '../components/Card'
 import { BackLink } from '../components/BackLink'
 import { Loading } from '../components/Loading'
 import { api } from '../api'
+import { AppLayout } from '../layouts/AppLayout'
 
 export function FeedPost({ postId, navigate }) {
   const { t } = useTheme()
@@ -31,3 +32,5 @@ export function FeedPost({ postId, navigate }) {
     </div>
   )
 }
+
+FeedPost.layout = page => <AppLayout>{page}</AppLayout>

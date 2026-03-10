@@ -4,6 +4,7 @@ import { Input } from '../components/Input'
 import { Button } from '../components/Button'
 import { Alert } from '../components/Alert'
 import { api } from '../api'
+import { AuthLayout } from '../layouts/AuthLayout'
 
 export function Auth({ mode, setUser, navigate }) {
   const { t } = useTheme()
@@ -49,3 +50,5 @@ export function Auth({ mode, setUser, navigate }) {
     </div>
   )
 }
+
+Auth.layout = page => <AuthLayout>{page}</AuthLayout>

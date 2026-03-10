@@ -7,6 +7,7 @@ import { Button } from '../components/Button'
 import { Alert } from '../components/Alert'
 import { Loading } from '../components/Loading'
 import { api } from '../api'
+import { AppLayout } from '../layouts/AppLayout'
 
 export function PostForm({ postId, navigate }) {
   const [form, setForm] = useState({ title: '', content: '', published: false })
@@ -55,3 +56,5 @@ export function PostForm({ postId, navigate }) {
     </div>
   )
 }
+
+PostForm.layout = page => <AppLayout>{page}</AppLayout>

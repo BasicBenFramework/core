@@ -1,6 +1,8 @@
 import { useTheme } from '../components/ThemeContext'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
+import { AppLayout } from '../layouts/AppLayout'
+import { DocsLayout } from '../layouts/DocsLayout'
 
 export function Database() {
   const { t } = useTheme()
@@ -422,3 +424,8 @@ await db.transaction(async (tx) => {
     </div>
   )
 }
+
+Database.layout = [
+  page => <AppLayout>{page}</AppLayout>,
+  page => <DocsLayout>{page}</DocsLayout>,
+]

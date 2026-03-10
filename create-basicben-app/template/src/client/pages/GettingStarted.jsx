@@ -1,6 +1,8 @@
 import { useTheme } from '../components/ThemeContext'
 import { Card } from '../components/Card'
 import { PageHeader } from '../components/PageHeader'
+import { AppLayout } from '../layouts/AppLayout'
+import { DocsLayout } from '../layouts/DocsLayout'
 
 export function GettingStarted() {
   const { t } = useTheme()
@@ -132,3 +134,8 @@ export function GettingStarted() {
     </div>
   )
 }
+
+GettingStarted.layout = [
+  page => <AppLayout>{page}</AppLayout>,
+  page => <DocsLayout>{page}</DocsLayout>,
+]

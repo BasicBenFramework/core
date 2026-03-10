@@ -5,6 +5,7 @@ import { Input } from '../components/Input'
 import { Button } from '../components/Button'
 import { Alert } from '../components/Alert'
 import { api } from '../api'
+import { AppLayout } from '../layouts/AppLayout'
 
 export function Profile({ user, setUser }) {
   const [form, setForm] = useState({ name: user.name, email: user.email })
@@ -61,3 +62,5 @@ export function Profile({ user, setUser }) {
     </div>
   )
 }
+
+Profile.layout = page => <AppLayout>{page}</AppLayout>

@@ -6,6 +6,7 @@ import { Button } from '../components/Button'
 import { Loading } from '../components/Loading'
 import { Empty } from '../components/Empty'
 import { api } from '../api'
+import { AppLayout } from '../layouts/AppLayout'
 
 export function Posts({ navigate }) {
   const { t } = useTheme()
@@ -48,3 +49,5 @@ export function Posts({ navigate }) {
     </div>
   )
 }
+
+Posts.layout = page => <AppLayout>{page}</AppLayout>

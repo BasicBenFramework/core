@@ -4,6 +4,7 @@ import { PostCard } from '../components/PostCard'
 import { Loading } from '../components/Loading'
 import { Empty } from '../components/Empty'
 import { api } from '../api'
+import { AppLayout } from '../layouts/AppLayout'
 
 export function Feed({ navigate }) {
   const [posts, setPosts] = useState([])
@@ -30,3 +31,5 @@ export function Feed({ navigate }) {
     </div>
   )
 }
+
+Feed.layout = page => <AppLayout>{page}</AppLayout>

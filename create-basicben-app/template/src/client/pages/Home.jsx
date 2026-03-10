@@ -2,6 +2,7 @@ import { useTheme } from '../components/ThemeContext'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
 import { Avatar } from '../components/Avatar'
+import { AppLayout } from '../layouts/AppLayout'
 
 export function Home({ user, navigate }) {
   const { t } = useTheme()
@@ -54,3 +55,5 @@ export function Home({ user, navigate }) {
     </div>
   )
 }
+
+Home.layout = page => <AppLayout>{page}</AppLayout>
