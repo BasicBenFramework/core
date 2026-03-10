@@ -6,7 +6,6 @@
  */
 
 import { createServer as createHttpServer } from 'node:http'
-import { parse as parseUrl } from 'node:url'
 
 /**
  * Create a minimal HTTP server instance
@@ -129,10 +128,10 @@ export function createApp(options = {}) {
    * Handle incoming request
    */
   async function handleRequest(req, res) {
-    // Parse URL
-    const parsed = parseUrl(req.url, true)
-    req.path = parsed.pathname || '/'
-    req.query = parsed.query || {}
+    // Parse URL using WHATWG URL API
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
+    req.path = url.pathname || '/'
+    req.query = Object.fromEntries(url.searchParams)
     req.params = {}
 
     // Find matching route
