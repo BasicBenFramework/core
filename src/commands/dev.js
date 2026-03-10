@@ -22,7 +22,15 @@ function loadEnv(cwd) {
     if (!trimmed || trimmed.startsWith('#')) continue
     const [key, ...rest] = trimmed.split('=')
     if (key && rest.length) {
-      process.env[key.trim()] = rest.join('=').trim()
+      let value = rest.join('=').trim()
+      // Strip inline comments (but not if inside quotes)
+      if (!value.startsWith('"') && !value.startsWith("'")) {
+        const commentIndex = value.indexOf('#')
+        if (commentIndex !== -1) {
+          value = value.substring(0, commentIndex).trim()
+        }
+      }
+      process.env[key.trim()] = value
     }
   }
 }
