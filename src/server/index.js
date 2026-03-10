@@ -1,10 +1,10 @@
 /**
  * BasicBen Server
  *
- * Built on Polka with custom router, middleware, and auto-loading.
+ * Zero-dependency HTTP server with custom router, middleware, and auto-loading.
  */
 
-import polka from 'polka'
+import { createApp } from './http.js'
 import { Router, createRouter } from './router.js'
 import { bodyParser, json } from './body-parser.js'
 import { cors } from './cors.js'
@@ -18,7 +18,7 @@ export async function createServer(options = {}) {
   const config = await loadConfig()
   const mergedConfig = { ...defaultConfig, ...config, ...options }
 
-  const app = polka({
+  const app = createApp({
     onError: mergedConfig.onError || defaultErrorHandler,
     onNoMatch: mergedConfig.onNoMatch || defaultNotFoundHandler
   })
@@ -160,6 +160,7 @@ export function addResponseHelpers(req, res, next) {
 }
 
 // Re-export components
+export { createApp } from './http.js'
 export { Router, createRouter } from './router.js'
 export { bodyParser, json } from './body-parser.js'
 export { cors } from './cors.js'

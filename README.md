@@ -487,34 +487,33 @@ export default {
 
 ## Dependencies
 
-BasicBen's dependency footprint is intentionally tiny:
+BasicBen has **zero runtime dependencies**:
 
 ```json
 {
-  "dependencies": {
-    "polka": "^0.5.2"
-  },
+  "dependencies": {},
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18",
-    "vite": ">=5",
-    "@vitejs/plugin-react": ">=4"
+    "vite": ">=7",
+    "@vitejs/plugin-react": ">=5"
   },
   "optionalDependencies": {
-    "better-sqlite3": ">=9",
+    "better-sqlite3": ">=12",
     "pg": ">=8"
   }
 }
 ```
 
-**One runtime dependency.** Polka is a 35-line Express-compatible HTTP server. Everything else is written from scratch:
+**Everything is written from scratch:**
 
+- HTTP server (uses node:http)
 - CLI argument parser (no Commander)
 - Router with groups, middleware, named routes
 - Validation (no Zod/Joi)
 - JWT auth (no jsonwebtoken, uses node:crypto)
 - Migrations (no Knex/Sequelize)
-- Environment variables (uses Node 20's built-in --env-file)
+- Environment variables (uses Node's built-in --env-file)
 
 ---
 

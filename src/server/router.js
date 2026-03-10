@@ -1,12 +1,12 @@
 /**
- * Custom Router built on Polka.
+ * Custom Router
  *
  * Features:
  * - Route registration (GET, POST, PUT, PATCH, DELETE)
  * - Route groups with shared prefix/middleware
  * - Per-route middleware
  * - Named routes for URL generation
- * - Parameter parsing (handled by Polka)
+ * - Parameter parsing
  */
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
@@ -198,7 +198,7 @@ export class Router {
   }
 
   /**
-   * Apply routes to a Polka instance
+   * Apply routes to an app instance
    */
   applyTo(app) {
     for (const route of this.routes) {
