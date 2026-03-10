@@ -11,11 +11,12 @@
  */
 
 import { mkdirSync, writeFileSync, copyFileSync, readdirSync, statSync, existsSync } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { join, resolve, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execSync } from 'node:child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const frameworkDir = resolve(__dirname, '..')
 
 // ANSI colors
 const bold = (s) => `\x1b[1m${s}\x1b[0m`
@@ -52,6 +53,9 @@ async function main() {
     process.exit(1)
   }
 
+  // Check for --local flag
+  const useLocal = args.includes('--local')
+
   const projectDir = resolve(process.cwd(), projectName)
 
   // Check if directory exists
@@ -71,6 +75,14 @@ async function main() {
   const templateDir = join(__dirname, 'template')
   copyDir(templateDir, projectDir)
 
+  // Determine basicben dependency
+  let basicbenDep = 'latest'
+  if (useLocal) {
+    const relativePath = relative(projectDir, frameworkDir)
+    basicbenDep = `file:${relativePath}`
+    console.log(`${yellow('Using local framework:')} ${relativePath}\n`)
+  }
+
   // Create package.json with project name
   const pkg = {
     name: projectName,
@@ -84,7 +96,7 @@ async function main() {
       test: 'basicben test'
     },
     dependencies: {
-      basicben: 'latest',
+      basicben: basicbenDep,
       react: '^18.2.0',
       'react-dom': '^18.2.0'
     },
@@ -131,16 +143,15 @@ function showHelp() {
 ${bold('create-basicben-app')} - Create a new BasicBen project
 
 ${bold('Usage:')}
-  npx create-basicben-app ${dim('<project-name>')}
+  npx create-basicben-app ${dim('<project-name>')} [options]
 
 ${bold('Options:')}
+  --local        Use local framework (for development)
   -h, --help     Show this help message
 
-${bold('Example:')}
+${bold('Examples:')}
   npx create-basicben-app my-app
-  cd my-app
-  npm install
-  npm run dev
+  npx create-basicben-app my-app --local   ${dim('# Use local framework')}
 `)
 }
 

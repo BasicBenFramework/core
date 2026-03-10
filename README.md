@@ -36,6 +36,16 @@ npx basicben dev
 
 Your app is running at `http://localhost:3000` with a fully functional blog app — user auth, posts, and profiles included.
 
+### Local Development
+
+To develop against a local copy of the framework:
+
+```bash
+npx create-basicben-app my-app --local
+```
+
+This sets the `basicben` dependency to `file:../basicben-framework` instead of fetching from npm.
+
 ---
 
 ## Project Structure
