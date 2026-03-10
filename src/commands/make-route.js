@@ -1,6 +1,6 @@
 /**
  * make:route command
- * Generates a route file in src/routes/
+ * Generates a route file in src/routes/api/
  */
 
 import { generate, transformName } from '../scaffolding/index.js'
@@ -17,7 +17,7 @@ export async function run(args, flags) {
 
   const names = transformName(name)
   const fileName = `${names.lower}.js`
-  const targetPath = `src/routes/${fileName}`
+  const targetPath = `src/routes/api/${fileName}`
 
   try {
     const fullPath = generate('route', targetPath, {
