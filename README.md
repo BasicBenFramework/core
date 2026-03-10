@@ -44,19 +44,39 @@ A new BasicBen project looks like this:
 ```
 my-app/
 ├── src/
-│   ├── routes/           # Auto-loaded API route files
-│   │   └── users.js
-│   ├── controllers/      # Business logic
-│   │   └── UserController.js
-│   ├── models/           # DB query wrappers
-│   │   └── User.js
-│   ├── middleware/       # Auto-loaded before routes
+│   ├── routes/              # Auto-loaded API route files
+│   │   ├── api.js
+│   │   ├── auth.js
+│   │   ├── posts.js
+│   │   └── profile.js
+│   ├── controllers/         # Business logic
+│   │   ├── AuthController.js
+│   │   ├── PostController.js
+│   │   └── ProfileController.js
+│   ├── models/              # DB query wrappers
+│   │   ├── User.js
+│   │   └── Post.js
+│   ├── middleware/          # Route middleware
 │   │   └── auth.js
-│   └── client/           # React frontend
+│   └── client/              # React frontend
 │       ├── main.jsx
-│       └── App.jsx
+│       ├── App.jsx
+│       ├── api.js
+│       ├── components/      # Reusable UI components
+│       │   ├── Button.jsx
+│       │   ├── Card.jsx
+│       │   ├── Input.jsx
+│       │   └── ...
+│       └── pages/           # Page components
+│           ├── Home.jsx
+│           ├── Auth.jsx
+│           ├── Feed.jsx
+│           ├── Posts.jsx
+│           ├── Profile.jsx
+│           └── ...
 ├── migrations/
-│   └── 001_create_users.js
+│   ├── 001_create_users.js
+│   └── 002_create_posts.js
 ├── public/
 ├── .env
 ├── .env.example
@@ -64,6 +84,37 @@ my-app/
 ```
 
 Routes, middleware, and models are loaded automatically — no manual imports needed.
+
+---
+
+## Starter Features
+
+Every new BasicBen project includes a fully functional blog app:
+
+### Authentication
+- User registration and login with JWT
+- Protected routes with auth middleware
+- Password hashing with `node:crypto`
+
+### User Profile
+- View and edit profile (name, email)
+- Change password
+
+### Blog Posts
+- Create, edit, delete posts
+- Publish/draft toggle
+- List your own posts
+
+### Public Feed
+- View all published posts
+- Single post view with author info
+
+### React Components
+The frontend uses reusable components:
+- `Button`, `Input`, `Textarea`, `Card` — form elements
+- `Alert`, `Loading`, `Empty` — feedback states
+- `PageHeader`, `BackLink`, `Avatar` — layout helpers
+- `ThemeContext` — light/dark mode support
 
 ---
 
@@ -303,13 +354,34 @@ if (!payload) {
 }
 ```
 
-Generate an auth middleware template:
+The starter template includes a complete auth system:
 
-```bash
-basicben make:middleware auth
+```js
+// src/middleware/auth.js
+import { verifyJwt } from 'basicben/auth'
+
+export const auth = async (req, res, next) => {
+  const token = req.headers.authorization?.replace('Bearer ', '')
+  if (!token) return res.json({ error: 'Unauthorized' }, 401)
+
+  const payload = verifyJwt(token, process.env.APP_KEY)
+  if (!payload) return res.json({ error: 'Invalid token' }, 401)
+
+  req.userId = payload.userId
+  next()
+}
 ```
 
-This creates a ready-to-use JWT auth middleware in `src/middleware/auth.js`.
+Use it in your routes:
+
+```js
+import { auth } from '../middleware/auth.js'
+
+export default (router) => {
+  router.get('/api/posts', auth, PostController.index)
+  router.post('/api/posts', auth, PostController.store)
+}
+```
 
 ---
 
