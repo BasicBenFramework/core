@@ -18,10 +18,95 @@ export function Database() {
     <div>
       <PageHeader
         title="Database"
-        subtitle="Migrations, seeding, and queries"
+        subtitle="Adapters, migrations, seeding, and queries"
       />
 
       <div className="space-y-6">
+        {/* Database Adapters */}
+        <Card>
+          <h2 className="text-lg font-semibold mb-2">Database Adapters</h2>
+          <p className={`text-sm ${t.muted} mb-4`}>
+            BasicBen supports multiple databases. Configure your adapter in <code>basicben.config.js</code>.
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mb-4">
+            <div className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+              <div className="font-semibold text-sm">SQLite</div>
+              <p className={`text-xs mt-1 ${t.muted}`}>Local file database (default)</p>
+            </div>
+            <div className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+              <div className="font-semibold text-sm">PostgreSQL</div>
+              <p className={`text-xs mt-1 ${t.muted}`}>Traditional Postgres</p>
+            </div>
+            <div className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+              <div className="font-semibold text-sm">Turso</div>
+              <p className={`text-xs mt-1 ${t.muted}`}>Edge SQLite (libSQL)</p>
+            </div>
+            <div className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+              <div className="font-semibold text-sm">PlanetScale</div>
+              <p className={`text-xs mt-1 ${t.muted}`}>Serverless MySQL</p>
+            </div>
+            <div className={`rounded-lg p-3 ${t.card} border ${t.border}`}>
+              <div className="font-semibold text-sm">Neon</div>
+              <p className={`text-xs mt-1 ${t.muted}`}>Serverless Postgres</p>
+            </div>
+          </div>
+
+          <CodeBlock title="basicben.config.js - SQLite (default)">
+{`export default {
+  db: {
+    driver: 'sqlite',
+    url: './database.sqlite'
+  }
+}`}
+          </CodeBlock>
+
+          <CodeBlock title="basicben.config.js - Turso">
+{`export default {
+  db: {
+    driver: 'turso',
+    url: process.env.TURSO_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN
+  }
+}`}
+          </CodeBlock>
+
+          <CodeBlock title="basicben.config.js - PlanetScale">
+{`export default {
+  db: {
+    driver: 'planetscale',
+    url: process.env.DATABASE_URL
+  }
+}`}
+          </CodeBlock>
+
+          <CodeBlock title="basicben.config.js - Neon">
+{`export default {
+  db: {
+    driver: 'neon',
+    url: process.env.DATABASE_URL
+  }
+}`}
+          </CodeBlock>
+
+          <CodeBlock title="Install the driver you need">
+{`# SQLite (default)
+npm install better-sqlite3
+
+# PostgreSQL
+npm install pg
+
+# Turso
+npm install @libsql/client
+
+# PlanetScale
+npm install @planetscale/database
+
+# Neon
+npm install @neondatabase/serverless`}
+          </CodeBlock>
+        </Card>
+
         {/* Migrations */}
         <Card>
           <h2 className="text-lg font-semibold mb-2">Migrations</h2>
@@ -228,6 +313,40 @@ export const User = {
       .update(data)
   }
 }`}
+          </CodeBlock>
+        </Card>
+
+        {/* Database Validation */}
+        <Card>
+          <h2 className="text-lg font-semibold mb-2">Database Validation</h2>
+          <p className={`text-sm ${t.muted} mb-4`}>
+            Validate data against your database with <code>unique</code> and <code>exists</code> rules.
+          </p>
+
+          <CodeBlock title="Unique validation">
+{`import { validate, rules } from 'basicben/validation'
+
+// Check email is unique in users table
+const result = await validate(req.body, {
+  email: [rules.required, rules.email, rules.unique('users')]
+})
+
+// With custom column name
+slug: [rules.unique('categories', 'slug')]
+
+// Exclude current record (for updates)
+email: [rules.unique('users', 'email', userId)]`}
+          </CodeBlock>
+
+          <CodeBlock title="Exists validation">
+{`// Check foreign key exists
+const result = await validate(req.body, {
+  user_id: [rules.required, rules.exists('users')],
+  category_id: [rules.required, rules.exists('categories')]
+})
+
+// With custom column
+category: [rules.exists('categories', 'slug')]`}
           </CodeBlock>
         </Card>
 

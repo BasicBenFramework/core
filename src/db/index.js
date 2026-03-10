@@ -1,6 +1,6 @@
 /**
  * Database adapter loader.
- * Provides a unified interface for SQLite and Postgres.
+ * Provides a unified interface for SQLite, Postgres, Turso, PlanetScale, and Neon.
  */
 
 import { loadConfig } from '../server/loader.js'
@@ -33,14 +33,46 @@ export async function getDb() {
   const driver = dbConfig.driver || 'sqlite'
   const url = dbConfig.url || process.env.DATABASE_URL || './database.sqlite'
 
-  if (driver === 'sqlite' || driver === 'better-sqlite3') {
-    const { createSqliteAdapter } = await import('./adapters/sqlite.js')
-    dbInstance = await createSqliteAdapter(url, dbConfig)
-  } else if (driver === 'postgres' || driver === 'pg') {
-    const { createPostgresAdapter } = await import('./adapters/postgres.js')
-    dbInstance = await createPostgresAdapter(url, dbConfig)
-  } else {
-    throw new Error(`Unknown database driver: ${driver}`)
+  switch (driver) {
+    case 'sqlite':
+    case 'better-sqlite3': {
+      const { createSqliteAdapter } = await import('./adapters/sqlite.js')
+      dbInstance = await createSqliteAdapter(url, dbConfig)
+      break
+    }
+
+    case 'postgres':
+    case 'pg': {
+      const { createPostgresAdapter } = await import('./adapters/postgres.js')
+      dbInstance = await createPostgresAdapter(url, dbConfig)
+      break
+    }
+
+    case 'turso':
+    case 'libsql': {
+      const { createTursoAdapter } = await import('./adapters/turso.js')
+      dbInstance = await createTursoAdapter(url, dbConfig)
+      break
+    }
+
+    case 'planetscale':
+    case 'mysql': {
+      const { createPlanetScaleAdapter } = await import('./adapters/planetscale.js')
+      dbInstance = await createPlanetScaleAdapter(url, dbConfig)
+      break
+    }
+
+    case 'neon': {
+      const { createNeonAdapter } = await import('./adapters/neon.js')
+      dbInstance = await createNeonAdapter(url, dbConfig)
+      break
+    }
+
+    default:
+      throw new Error(
+        `Unknown database driver: ${driver}\n` +
+        'Supported drivers: sqlite, postgres, turso, planetscale, neon'
+      )
   }
 
   return dbInstance

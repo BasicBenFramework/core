@@ -48,8 +48,12 @@ export class Grammar {
     // Validate first
     this.validateId(name)
 
-    // Both SQLite and Postgres use double quotes for identifiers
-    // Escape any existing double quotes by doubling them
+    // MySQL/PlanetScale uses backticks for identifiers
+    if (this.driver === 'planetscale' || this.driver === 'mysql') {
+      return `\`${name.replace(/`/g, '``')}\``
+    }
+
+    // SQLite, Postgres, Turso, Neon use double quotes for identifiers
     return `"${name.replace(/"/g, '""')}"`
   }
 
@@ -60,9 +64,11 @@ export class Grammar {
    * @returns {string} The placeholder string
    */
   placeholder(index) {
-    if (this.driver === 'postgres' || this.driver === 'pg') {
+    // Postgres and Neon use $1, $2, etc.
+    if (this.driver === 'postgres' || this.driver === 'pg' || this.driver === 'neon') {
       return `$${index + 1}`
     }
+    // SQLite, Turso, PlanetScale use ?
     return '?'
   }
 

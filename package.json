@@ -54,6 +54,9 @@
   },
   "optionalDependencies": {
     "better-sqlite3": ">=9",
-    "pg": ">=8"
+    "pg": ">=8",
+    "@libsql/client": ">=0.5",
+    "@planetscale/database": ">=1",
+    "@neondatabase/serverless": ">=0.9"
   }
 }
