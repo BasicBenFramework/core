@@ -1,0 +1,42 @@
+{
+  "name": "basicben",
+  "version": "0.1.0",
+  "description": "A full-stack framework for React. Minimal dependencies, maximum clarity.",
+  "type": "module",
+  "bin": {
+    "basicben": "./bin/cli.js"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./validation": "./src/validation/index.js",
+    "./auth": "./src/auth/jwt.js",
+    "./db": "./src/db/index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "node --test src/**/*.test.js"
+  },
+  "keywords": [
+    "react",
+    "framework",
+    "fullstack",
+    "vite",
+    "minimal"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "polka": "^0.5.2",
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": ">=9",
+    "pg": ">=8"
+  }
+}
