@@ -24,7 +24,7 @@
     "./db": "./src/db/index.js"
   },
   "engines": {
-    "node": ">=24.14.0"
+    "node": ">=25.8.1"
   },
   "scripts": {
     "test": "node --test src/**/*.test.js",

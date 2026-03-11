@@ -27,7 +27,7 @@ Most JS frameworks make one of two mistakes: they do too much (Next.js, Remix) o
 
 ## Requirements
 
-- Node.js 24.14+
+- Node.js 25.8.1+
 - npm 9+
 
 ---

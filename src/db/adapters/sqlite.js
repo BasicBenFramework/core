@@ -1,7 +1,7 @@
 /**
  * SQLite adapter using Node.js built-in node:sqlite.
  * Provides synchronous API wrapped for consistency with async Postgres adapter.
- * Requires Node.js 22.5.0+ (experimental) or Node.js 25.7.0+ (stable).
+ * Requires Node.js 25+ (release candidate).
  */
 
 import { DatabaseSync } from 'node:sqlite'
