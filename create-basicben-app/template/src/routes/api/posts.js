@@ -1,5 +1,5 @@
-import { PostController } from '../controllers/PostController.js'
-import { auth } from '../middleware/auth.js'
+import { PostController } from '../../controllers/PostController.js'
+import { auth } from '../../middleware/auth.js'
 
 export default (router) => {
   // Public feed routes

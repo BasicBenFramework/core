@@ -1,4 +1,4 @@
-import { AuthController } from '../controllers/AuthController.js'
+import { AuthController } from '../../controllers/AuthController.js'
 
 export default (router) => {
   router.post('/api/auth/register', AuthController.register)
