@@ -34,7 +34,8 @@
     "test:server": "node --test src/server/**/*.test.js",
     "test:cli": "node --test src/cli/**/*.test.js",
     "test:scaffolding": "node --test src/scaffolding/**/*.test.js",
-    "test:app": "./scripts/test-app.sh"
+    "test:app": "./scripts/test-app.sh",
+    "release": "./scripts/publish.sh"
   },
   "keywords": [
     "react",
