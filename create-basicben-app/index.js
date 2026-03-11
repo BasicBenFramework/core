@@ -176,7 +176,9 @@ function copyDir(src, dest) {
 
   for (const entry of entries) {
     const srcPath = join(src, entry.name)
-    const destPath = join(dest, entry.name)
+    // Rename gitignore to .gitignore (npm strips dotfiles during publish)
+    const destName = entry.name === 'gitignore' ? '.gitignore' : entry.name
+    const destPath = join(dest, destName)
 
     if (entry.isDirectory()) {
       copyDir(srcPath, destPath)
