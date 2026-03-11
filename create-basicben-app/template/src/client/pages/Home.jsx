@@ -1,5 +1,5 @@
+import { useState, useEffect } from 'react'
 import { useAuth, useNavigate } from '@basicbenframework/core/client'
-import { VERSION } from '@basicbenframework/core'
 import { useTheme } from '../components/ThemeContext'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
@@ -10,6 +10,14 @@ export function Home() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { t, dark } = useTheme()
+  const [version, setVersion] = useState(null)
+
+  useEffect(() => {
+    fetch('https://registry.npmjs.org/@basicbenframework/core/latest')
+      .then(res => res.json())
+      .then(data => setVersion(data.version))
+      .catch(() => {})
+  }, [])
 
   const features = [
     {
@@ -198,9 +206,9 @@ export default (router) => {
       )}
 
       {/* Footer */}
-      <footer className={`text-center text-xs ${t.subtle} space-y-2`}>
+      <footer className={`text-center text-xs ${t.subtle} space-y-1`}>
         <p>Built with Node.js built-ins. Inspired by Laravel.</p>
-        <p>BasicBen v{VERSION}</p>
+        {version && <p>BasicBen v{version}</p>}
       </footer>
     </div>
   )
