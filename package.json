@@ -1,6 +1,6 @@
 {
   "name": "@basicbenframework/core",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A full-stack framework for React. Minimal dependencies, maximum clarity.",
   "author": "ctmakes",
   "repository": {
