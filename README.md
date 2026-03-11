@@ -35,7 +35,7 @@ Most JS frameworks make one of two mistakes: they do too much (Next.js, Remix) o
 ## Quick Start
 
 ```bash
-npx create-basicben-app my-app
+npx @basicbenframework/create my-app
 cd my-app
 npm install
 npx basicben migrate
@@ -49,7 +49,7 @@ Your app is running at `http://localhost:3000` with a fully functional blog app 
 To develop against a local copy of the framework:
 
 ```bash
-npx create-basicben-app my-app --local
+npx @basicbenframework/create my-app --local
 ```
 
 This sets the `basicben` dependency to `file:../basicben-framework` instead of fetching from npm.

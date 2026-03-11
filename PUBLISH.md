@@ -1,25 +1,41 @@
 # Publishing to npm
 
-## Setup (one-time)
+## First Publish (Manual)
 
-1. **Create npm access token**
-   - Go to [npmjs.com](https://www.npmjs.com) → Account → Access Tokens
-   - Generate New Token → Select "Automation"
-   - Copy the token
+Packages must exist before configuring Trusted Publishing.
 
-2. **Add token to GitHub**
-   - Go to your GitHub repo → Settings → Secrets and variables → Actions
-   - Click "New repository secret"
-   - Name: `NPM_TOKEN`
-   - Value: paste your npm token
+```bash
+# Login to npm
+npm login
 
-## Publishing
+# Publish main package
+npm publish --access public
+
+# Publish @basicbenframework/create
+cd create-basicben-app
+npm publish --access public
+```
+
+## Setup Trusted Publishing
+
+After packages exist, configure OIDC for automated releases.
+
+1. Go to [npmjs.com](https://www.npmjs.com) → Package Settings → Publishing Access
+2. Click "Add Linked Provider" → GitHub Actions
+3. Repository: `BasicBenFramework/basicben-framework`
+4. Repeat for both packages:
+   - `@basicbenframework/core`
+   - `@basicbenframework/create`
+
+## Automated Publishing
+
+Once Trusted Publishing is configured:
 
 1. **Update version numbers**
    ```bash
    # Edit package.json version in both:
-   # - /package.json (@basicbenframework/core)
-   # - /create-basicben-app/package.json (create-basicben-app)
+   # - /package.json
+   # - /create-basicben-app/package.json
    ```
 
 2. **Commit and tag**
@@ -32,26 +48,11 @@
 
 3. **GitHub Actions will automatically**
    - Run tests
-   - Publish `@basicbenframework/core` to npm
-   - Publish `create-basicben-app` to npm
-
-## Manual Publishing (if needed)
-
-```bash
-# Login to npm
-npm login
-
-# Publish main package
-npm publish --access public
-
-# Publish create-basicben-app
-cd create-basicben-app
-npm publish --access public
-```
+   - Publish both packages to npm
 
 ## Packages
 
-| Package | npm |
-|---------|-----|
+| Package | Description |
+|---------|-------------|
 | `@basicbenframework/core` | Framework core |
-| `create-basicben-app` | `npx create-basicben-app my-app` |
+| `@basicbenframework/create` | `npx @basicbenframework/create my-app` |

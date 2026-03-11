@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * create-basicben-app
+ * @basicbenframework/create
  *
  * Scaffolds a new BasicBen project with the recommended structure.
  *
  * Usage:
- *   npx create-basicben-app my-app
- *   npx create-basicben-app my-app --template minimal
+ *   npx @basicbenframework/create my-app
+ *   npx @basicbenframework/create my-app --template minimal
  */
 
 import { mkdirSync, writeFileSync, copyFileSync, readdirSync, statSync, existsSync } from 'node:fs'
@@ -43,7 +43,7 @@ async function main() {
 
   if (!projectName || projectName.startsWith('-')) {
     console.error(`\n${red('Error:')} Please provide a project name.\n`)
-    console.log(`  ${cyan('npx create-basicben-app')} ${dim('<project-name>')}\n`)
+    console.log(`  ${cyan('npx @basicbenframework/create')} ${dim('<project-name>')}\n`)
     process.exit(1)
   }
 
@@ -150,18 +150,18 @@ VITE_PORT=3000         # Frontend dev server
  */
 function showHelp() {
   console.log(`
-${bold('create-basicben-app')} - Create a new BasicBen project
+${bold('@basicbenframework/create')} - Create a new BasicBen project
 
 ${bold('Usage:')}
-  npx create-basicben-app ${dim('<project-name>')} [options]
+  npx @basicbenframework/create ${dim('<project-name>')} [options]
 
 ${bold('Options:')}
   --local        Use local framework (for development)
   -h, --help     Show this help message
 
 ${bold('Examples:')}
-  npx create-basicben-app my-app
-  npx create-basicben-app my-app --local   ${dim('# Use local framework')}
+  npx @basicbenframework/create my-app
+  npx @basicbenframework/create my-app --local   ${dim('# Use local framework')}
 `)
 }
 

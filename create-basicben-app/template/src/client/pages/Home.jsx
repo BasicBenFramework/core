@@ -81,7 +81,7 @@ export function Home() {
         </p>
         <div className="flex flex-col items-center gap-4">
           <div className={`px-4 py-3 rounded-lg ${t.card} border ${t.border} font-mono text-sm`}>
-            <span className={t.muted}>$</span> npx create-basicben-app my-app
+            <span className={t.muted}>$</span> npx @basicbenframework/create my-app
           </div>
           <div className="flex gap-3">
             <Button onClick={() => navigate('/docs')}>Get Started</Button>

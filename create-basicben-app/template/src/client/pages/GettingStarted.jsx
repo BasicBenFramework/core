@@ -41,7 +41,7 @@ export function GettingStarted() {
           <h2 className="text-lg font-semibold mb-4">Quick Start</h2>
           <div className={`rounded-lg p-4 font-mono text-sm ${t.card} border ${t.border} overflow-x-auto`}>
             <div className={t.muted}># Create a new project</div>
-            <div>npx create-basicben-app my-app</div>
+            <div>npx @basicbenframework/create my-app</div>
             <div className="mt-2" />
             <div className={t.muted}># Navigate to the project</div>
             <div>cd my-app</div>

@@ -1,10 +1,10 @@
 {
-  "name": "create-basicben-app",
+  "name": "@basicbenframework/create",
   "version": "0.1.0",
   "description": "Create a new BasicBen application",
   "type": "module",
   "bin": {
-    "create-basicben-app": "./index.js"
+    "create-basicben": "./index.js"
   },
   "files": [
     "index.js",
