@@ -2,7 +2,9 @@
  * BasicBen framework public API
  */
 
-export const VERSION = '0.1.0'
+import pkg from '../package.json' with { type: 'json' }
+
+export const VERSION = pkg.version
 
 // Database
 export { db, query, getDb, QueryBuilder, Grammar } from './db/index.js'

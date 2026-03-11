@@ -1,4 +1,5 @@
 import { useAuth, useNavigate } from '@basicbenframework/core/client'
+import { VERSION } from '@basicbenframework/core'
 import { useTheme } from '../components/ThemeContext'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
@@ -199,7 +200,7 @@ export default (router) => {
       {/* Footer */}
       <footer className={`text-center text-xs ${t.subtle} space-y-2`}>
         <p>Built with Node.js built-ins. Inspired by Laravel.</p>
-        <p>BasicBen v0.1.0</p>
+        <p>BasicBen v{VERSION}</p>
       </footer>
     </div>
   )
