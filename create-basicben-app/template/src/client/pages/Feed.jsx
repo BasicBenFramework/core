@@ -4,7 +4,7 @@ import { PageHeader } from '../components/PageHeader'
 import { PostCard } from '../components/PostCard'
 import { Loading } from '../components/Loading'
 import { Empty } from '../components/Empty'
-import { api } from '../api'
+import { api } from '../../helpers/api'
 
 export function Feed() {
   const navigate = useNavigate()

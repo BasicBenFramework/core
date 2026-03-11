@@ -3,7 +3,7 @@ import { useAuth, useNavigate, usePath } from '@basicbenframework/core/client'
 import { useTheme } from '../components/ThemeContext'
 import { Input } from '../components/Input'
 import { Button } from '../components/Button'
-import { api } from '../api'
+import { api } from '../../helpers/api'
 import { useToast } from '../contexts/ToastContext'
 
 export function Auth() {

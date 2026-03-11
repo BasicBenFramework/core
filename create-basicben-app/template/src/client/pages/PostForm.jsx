@@ -6,7 +6,7 @@ import { Input } from '../components/Input'
 import { Textarea } from '../components/Textarea'
 import { Button } from '../components/Button'
 import { Loading } from '../components/Loading'
-import { api } from '../api'
+import { api } from '../../helpers/api'
 import { useToast } from '../contexts/ToastContext'
 
 export function PostForm() {

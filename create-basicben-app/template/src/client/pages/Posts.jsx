@@ -6,7 +6,7 @@ import { Card } from '../components/Card'
 import { Button } from '../components/Button'
 import { Loading } from '../components/Loading'
 import { Empty } from '../components/Empty'
-import { api } from '../api'
+import { api } from '../../helpers/api'
 import { useToast } from '../contexts/ToastContext'
 
 export function Posts() {

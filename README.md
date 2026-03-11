@@ -62,12 +62,15 @@ A new BasicBen project looks like this:
 
 ```
 my-app/
+├── index.html               # Vite entry point
 ├── src/
-│   ├── routes/              # Auto-loaded API route files
-│   │   ├── api.js
-│   │   ├── auth.js
-│   │   ├── posts.js
-│   │   └── profile.js
+│   ├── main.jsx             # React entry point
+│   ├── routes/
+│   │   ├── App.jsx          # Client routes
+│   │   └── api/             # Auto-loaded API routes
+│   │       ├── auth.js
+│   │       ├── posts.js
+│   │       └── profile.js
 │   ├── controllers/         # Business logic
 │   │   ├── AuthController.js
 │   │   ├── PostController.js
@@ -77,28 +80,29 @@ my-app/
 │   │   └── Post.js
 │   ├── middleware/          # Route middleware
 │   │   └── auth.js
+│   ├── helpers/             # Utility functions
+│   │   └── api.js           # Fetch wrapper with auth
 │   └── client/              # React frontend
-│       ├── main.jsx
-│       ├── App.jsx
-│       ├── api.js
-│       ├── components/      # Reusable UI components
-│       │   ├── Button.jsx
-│       │   ├── Card.jsx
-│       │   ├── Input.jsx
+│       ├── layouts/         # Layout components
+│       │   ├── AppLayout.jsx
+│       │   ├── AuthLayout.jsx
+│       │   └── DocsLayout.jsx
+│       ├── pages/           # Page components
+│       │   ├── Home.jsx
+│       │   ├── Auth.jsx
+│       │   ├── Feed.jsx
+│       │   ├── Posts.jsx
+│       │   ├── Profile.jsx
 │       │   └── ...
-│       └── pages/           # Page components
-│           ├── Home.jsx
-│           ├── Auth.jsx
-│           ├── Feed.jsx
-│           ├── Posts.jsx
-│           ├── Profile.jsx
+│       └── components/      # Reusable UI components
+│           ├── Button.jsx
+│           ├── Card.jsx
+│           ├── Input.jsx
 │           └── ...
 ├── migrations/
 │   ├── 001_create_users.js
 │   └── 002_create_posts.js
 ├── public/
-├── .env
-├── .env.example
 └── basicben.config.js
 ```
 
@@ -169,22 +173,44 @@ basicben help <command>            # Show help for a specific command
 
 ## Routing
 
-Create a file in `src/routes/` and export a default function that receives the router:
+### API Routes
+
+Create a file in `src/routes/api/` and export a default function that receives the router:
 
 ```js
-// src/routes/users.js
-import { UserController } from '../controllers/UserController.js'
+// src/routes/api/users.js
+import { UserController } from '../../controllers/UserController.js'
 
 export default (router) => {
-  router.get('/users', UserController.index)
-  router.get('/users/:id', UserController.show)
-  router.post('/users', UserController.create)
-  router.put('/users/:id', UserController.update)
-  router.delete('/users/:id', UserController.destroy)
+  router.get('/api/users', UserController.index)
+  router.get('/api/users/:id', UserController.show)
+  router.post('/api/users', UserController.create)
+  router.put('/api/users/:id', UserController.update)
+  router.delete('/api/users/:id', UserController.destroy)
 }
 ```
 
-All files in `src/routes/` are registered automatically on startup.
+All files in `src/routes/api/` are registered automatically on startup.
+
+### Client Routes
+
+Client-side routing is configured in `src/routes/App.jsx`:
+
+```js
+// src/routes/App.jsx
+import { createClientApp } from '@basicbenframework/core/client'
+import { AppLayout } from '../client/layouts/AppLayout'
+import { Home } from '../client/pages/Home'
+import { Posts } from '../client/pages/Posts'
+
+export default createClientApp({
+  layout: AppLayout,
+  routes: {
+    '/': Home,
+    '/posts': { component: Posts, auth: true },
+  }
+})
+```
 
 ---
 
@@ -395,7 +421,9 @@ export const auth = async (req, res, next) => {
 Use it in your routes:
 
 ```js
-import { auth } from '../middleware/auth.js'
+// src/routes/api/posts.js
+import { auth } from '../../middleware/auth.js'
+import { PostController } from '../../controllers/PostController.js'
 
 export default (router) => {
   router.get('/api/posts', auth, PostController.index)

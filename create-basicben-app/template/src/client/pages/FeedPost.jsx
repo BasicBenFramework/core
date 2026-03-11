@@ -4,7 +4,7 @@ import { useTheme } from '../components/ThemeContext'
 import { Card } from '../components/Card'
 import { BackLink } from '../components/BackLink'
 import { Loading } from '../components/Loading'
-import { api } from '../api'
+import { api } from '../../helpers/api'
 
 export function FeedPost() {
   const navigate = useNavigate()
