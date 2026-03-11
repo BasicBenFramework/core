@@ -31,7 +31,6 @@ export function createClientApp(config) {
     const [user, setUser] = useState(null)
     const [loading, setLoading] = useState(true)
     const [path, setPath] = useState(window.location.pathname)
-    const [params, setParams] = useState({})
 
     // Match current route
     const matchRoute = useCallback((pathname) => {
@@ -90,14 +89,6 @@ export function createClientApp(config) {
       return () => window.removeEventListener('popstate', handlePopState)
     }, [])
 
-    // Update params when path changes
-    useEffect(() => {
-      const matched = matchRoute(path)
-      if (matched) {
-        setParams(matched.params)
-      }
-    }, [path, matchRoute])
-
     // Loading state
     if (loading) {
       if (Loading) return createElement(Loading)
@@ -112,7 +103,7 @@ export function createClientApp(config) {
       return createElement('div', null, '404 - Not Found')
     }
 
-    const { route } = matched
+    const { route, params } = matched
 
     // Route guards
     if (route.auth && !user) {
