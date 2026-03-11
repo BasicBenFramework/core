@@ -25,11 +25,7 @@ jobs:
 
       - name: Publish @basicbenframework/core
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @basicbenframework/create
         working-directory: ./create-basicben-app
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
