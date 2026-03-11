@@ -53,10 +53,6 @@
     "@vitejs/plugin-react": ">=5"
   },
   "optionalDependencies": {
-    "better-sqlite3": ">=12",
-    "pg": ">=8",
-    "@libsql/client": ">=0.17",
-    "@planetscale/database": ">=1",
-    "@neondatabase/serverless": ">=1.0"
+    "pg": ">=8"
   }
 }

@@ -1,29 +1,15 @@
 /**
- * Tests for SQLite adapter
- * Skipped if better-sqlite3 is not installed
+ * Tests for SQLite adapter using node:sqlite
  */
 
 import { test, describe, before, after } from 'node:test'
 import assert from 'node:assert'
 import { unlinkSync, existsSync } from 'node:fs'
+import { createSqliteAdapter } from './sqlite.js'
 
 const TEST_DB = './test-sqlite.db'
 
-// Check if better-sqlite3 is available
-let createSqliteAdapter
-let skipTests = false
-
-try {
-  const module = await import('./sqlite.js')
-  createSqliteAdapter = module.createSqliteAdapter
-
-  // Quick test to see if better-sqlite3 works
-  await import('better-sqlite3')
-} catch {
-  skipTests = true
-}
-
-describe('SQLite Adapter', { skip: skipTests }, () => {
+describe('SQLite Adapter', () => {
   let db
 
   before(async () => {
@@ -57,7 +43,9 @@ describe('SQLite Adapter', { skip: skipTests }, () => {
       ['Alice', 'alice@test.com']
     )
 
-    assert.strictEqual(result.lastInsertRowid, 1)
+    // lastInsertRowid is number in Node 22, bigint in Node 24+
+    assert.ok(typeof result.lastInsertRowid === 'number' || typeof result.lastInsertRowid === 'bigint')
+    assert.strictEqual(Number(result.lastInsertRowid), 1)
     assert.strictEqual(result.changes, 1)
   })
 
@@ -131,8 +119,3 @@ describe('SQLite Adapter', { skip: skipTests }, () => {
     assert.strictEqual(countAfter, countBefore)
   })
 })
-
-// If tests are skipped, add a note
-if (skipTests) {
-  test('SQLite tests skipped (better-sqlite3 not installed)', { skip: true }, () => {})
-}

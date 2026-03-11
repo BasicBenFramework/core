@@ -1,6 +1,6 @@
 /**
  * Database adapter loader.
- * Provides a unified interface for SQLite, Postgres, Turso, PlanetScale, and Neon.
+ * Provides a unified interface for SQLite and Postgres.
  */
 
 import { loadConfig } from '../server/loader.js'
@@ -34,8 +34,7 @@ export async function getDb() {
   const url = dbConfig.url || process.env.DATABASE_URL || './database.sqlite'
 
   switch (driver) {
-    case 'sqlite':
-    case 'better-sqlite3': {
+    case 'sqlite': {
       const { createSqliteAdapter } = await import('./adapters/sqlite.js')
       dbInstance = await createSqliteAdapter(url, dbConfig)
       break
@@ -48,30 +47,10 @@ export async function getDb() {
       break
     }
 
-    case 'turso':
-    case 'libsql': {
-      const { createTursoAdapter } = await import('./adapters/turso.js')
-      dbInstance = await createTursoAdapter(url, dbConfig)
-      break
-    }
-
-    case 'planetscale':
-    case 'mysql': {
-      const { createPlanetScaleAdapter } = await import('./adapters/planetscale.js')
-      dbInstance = await createPlanetScaleAdapter(url, dbConfig)
-      break
-    }
-
-    case 'neon': {
-      const { createNeonAdapter } = await import('./adapters/neon.js')
-      dbInstance = await createNeonAdapter(url, dbConfig)
-      break
-    }
-
     default:
       throw new Error(
         `Unknown database driver: ${driver}\n` +
-        'Supported drivers: sqlite, postgres, turso, planetscale, neon'
+        'Supported drivers: sqlite, postgres'
       )
   }
 

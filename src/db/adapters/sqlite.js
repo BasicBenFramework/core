@@ -1,27 +1,10 @@
 /**
- * SQLite adapter using better-sqlite3.
+ * SQLite adapter using Node.js built-in node:sqlite.
  * Provides synchronous API wrapped for consistency with async Postgres adapter.
+ * Requires Node.js 22.5.0+ (experimental) or Node.js 25.7.0+ (stable).
  */
 
-let Database = null
-
-/**
- * Load better-sqlite3 dynamically
- */
-async function loadDriver() {
-  if (Database) return Database
-
-  try {
-    const module = await import('better-sqlite3')
-    Database = module.default
-    return Database
-  } catch {
-    throw new Error(
-      'better-sqlite3 is required for SQLite support.\n' +
-      'Install it with: npm install better-sqlite3'
-    )
-  }
-}
+import { DatabaseSync } from 'node:sqlite'
 
 /**
  * Create SQLite adapter
@@ -30,19 +13,15 @@ async function loadDriver() {
  * @param {Object} options - Additional options
  */
 export async function createSqliteAdapter(url, options = {}) {
-  const SqliteDatabase = await loadDriver()
-
   const dbPath = url.replace('sqlite://', '').replace('file://', '')
-  const db = new SqliteDatabase(dbPath, {
-    verbose: options.verbose ? console.log : undefined
-  })
 
-  // Enable foreign keys by default
-  db.pragma('foreign_keys = ON')
+  const db = new DatabaseSync(dbPath, {
+    enableForeignKeyConstraints: true
+  })
 
   // Enable WAL mode for better concurrency
   if (options.wal !== false) {
-    db.pragma('journal_mode = WAL')
+    db.exec('PRAGMA journal_mode = WAL')
   }
 
   return {
@@ -91,8 +70,15 @@ export async function createSqliteAdapter(url, options = {}) {
      * Run function in transaction
      */
     transaction(fn) {
-      const transaction = db.transaction(fn)
-      return transaction()
+      db.exec('BEGIN TRANSACTION')
+      try {
+        const result = fn()
+        db.exec('COMMIT')
+        return result
+      } catch (error) {
+        db.exec('ROLLBACK')
+        throw error
+      }
     },
 
     /**
@@ -103,7 +89,7 @@ export async function createSqliteAdapter(url, options = {}) {
     },
 
     /**
-     * Get underlying better-sqlite3 instance
+     * Get underlying DatabaseSync instance
      */
     get raw() {
       return db
