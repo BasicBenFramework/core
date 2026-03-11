@@ -20,6 +20,9 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Install test dependencies
+        run: npm install better-sqlite3
+
       - name: Run tests
         run: npm test
 
