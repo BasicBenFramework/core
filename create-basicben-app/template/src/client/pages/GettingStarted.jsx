@@ -107,7 +107,7 @@ export function GettingStarted() {
           <h2 className="text-lg font-semibold mb-4">Resources</h2>
           <div className="flex flex-wrap gap-3">
             <a
-              href="https://github.com/BasicBenFramework/basicben-framework"
+              href="https://github.com/BasicBenFramework/core"
               target="_blank"
               rel="noopener noreferrer"
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${t.btnSecondary} transition text-sm`}

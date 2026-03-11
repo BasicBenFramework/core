@@ -52,7 +52,7 @@ To develop against a local copy of the framework:
 npx @basicbenframework/create my-app --local
 ```
 
-This sets the `basicben` dependency to `file:../basicben-framework` instead of fetching from npm.
+This sets the `basicben` dependency to `file:../core` instead of fetching from npm.
 
 ---
 
@@ -567,8 +567,8 @@ BasicBen has **zero runtime dependencies**:
 BasicBen is early. Contributions, issues, and ideas are welcome.
 
 ```bash
-git clone https://github.com/BasicBenFramework/basicben-framework
-cd basicben-framework
+git clone https://github.com/BasicBenFramework/core
+cd core
 npm install
 npm run dev
 ```

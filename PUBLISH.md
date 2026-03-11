@@ -42,7 +42,7 @@ After packages exist, configure OIDC for automated releases.
 
 1. Go to [npmjs.com](https://www.npmjs.com) → Package Settings → Publishing Access
 2. Click "Add Linked Provider" → GitHub Actions
-3. Repository: `BasicBenFramework/basicben-framework`
+3. Repository: `BasicBenFramework/core`
 4. Repeat for both packages:
    - `@basicbenframework/core`
    - `@basicbenframework/create`

@@ -85,7 +85,7 @@ export function Home() {
           </div>
           <div className="flex gap-3">
             <Button onClick={() => navigate('/docs')}>Get Started</Button>
-            <Button variant="secondary" onClick={() => window.open('https://github.com/BasicBenFramework/basicben-framework', '_blank')}>
+            <Button variant="secondary" onClick={() => window.open('https://github.com/BasicBenFramework/core', '_blank')}>
               GitHub
             </Button>
           </div>

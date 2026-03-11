@@ -1,6 +1,6 @@
 # My BasicBen App
 
-Built with [BasicBen](https://github.com/BasicBenFramework/basicben-framework) — a full-stack React framework with zero runtime dependencies.
+Built with [BasicBen](https://github.com/BasicBenFramework/core) — a full-stack React framework with zero runtime dependencies.
 
 ## Getting Started
 
@@ -56,4 +56,4 @@ Edit `basicben.config.js` to customize server settings, CORS, database, and more
 
 ## Documentation
 
-Full documentation: [github.com/BasicBenFramework/basicben-framework](https://github.com/BasicBenFramework/basicben-framework)
+Full documentation: [github.com/BasicBenFramework/core](https://github.com/BasicBenFramework/core)
