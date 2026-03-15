@@ -14,6 +14,10 @@ export async function run(args, flags) {
 
   console.log(`\n${bold('BasicBen')} ${dim('build')}${staticOnly ? dim(' --static') : ''}\n`)
 
+  // Detect if this is a TypeScript project
+  const serverEntry = findServerEntry(cwd)
+  const isTypeScript = serverEntry && serverEntry.endsWith('.ts')
+
   // Build client with Vite
   console.log(`${cyan('Building client...')}\n`)
 
@@ -33,16 +37,47 @@ export async function run(args, flags) {
     return
   }
 
-  // Copy server files to dist
-  console.log(`${cyan('Preparing server...')}\n`)
+  // Build server
+  console.log(`${cyan('Building server...')}\n`)
 
-  await prepareServer(cwd)
-
-  console.log(`${green('✓')} Server prepared in ${dim('dist/server')}\n`)
+  if (isTypeScript) {
+    // Use Vite SSR build for TypeScript projects
+    const serverBuild = await runViteSSRBuild(cwd, serverEntry)
+    if (!serverBuild.success) {
+      console.error(`\n${red('Server build failed')}\n`)
+      process.exit(1)
+    }
+    console.log(`${green('✓')} Server compiled to ${dim('dist/server')}\n`)
+  } else {
+    // Copy server files for JavaScript projects
+    await prepareServer(cwd)
+    console.log(`${green('✓')} Server prepared in ${dim('dist/server')}\n`)
+  }
 
   // Summary
   console.log(`${green('Build complete!')}\n`)
   console.log(`Run ${cyan('basicben start')} to start the production server.\n`)
+}
+
+/**
+ * Find server entry point
+ */
+function findServerEntry(cwd) {
+  const candidates = [
+    'src/server/index.ts',
+    'src/server/index.js',
+    'src/server.ts',
+    'src/server.js'
+  ]
+
+  for (const candidate of candidates) {
+    const fullPath = resolve(cwd, candidate)
+    if (existsSync(fullPath)) {
+      return candidate
+    }
+  }
+
+  return null
 }
 
 /**
@@ -51,6 +86,34 @@ export async function run(args, flags) {
 function runViteBuild(cwd, outDir = 'dist/client') {
   return new Promise((resolve) => {
     const proc = spawn('npx', ['vite', 'build', '--outDir', outDir], {
+      cwd,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        NODE_ENV: 'production'
+      }
+    })
+
+    proc.on('exit', (code) => {
+      resolve({ success: code === 0 })
+    })
+
+    proc.on('error', () => {
+      resolve({ success: false })
+    })
+  })
+}
+
+/**
+ * Run Vite SSR build for TypeScript server
+ */
+function runViteSSRBuild(cwd, serverEntry) {
+  return new Promise((resolve) => {
+    const proc = spawn('npx', [
+      'vite', 'build',
+      '--ssr', serverEntry,
+      '--outDir', 'dist/server'
+    ], {
       cwd,
       stdio: 'inherit',
       env: {

@@ -4,9 +4,9 @@
  * Vite proxies /api/* requests to Node
  */
 
-import { spawn } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import { spawn, execSync } from 'node:child_process'
+import { existsSync, readFileSync, watch } from 'node:fs'
+import { resolve, dirname, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { bold, cyan, green, yellow, dim, red } from '../cli/colors.js'
 
@@ -48,12 +48,38 @@ export async function run(args, flags) {
 
   // Find server entry (uses framework default if no custom server)
   const serverEntry = findServerEntry(cwd)
+  const isTypeScript = serverEntry && serverEntry.endsWith('.ts')
 
   const viteConfig = findViteConfig(cwd)
 
   // Start Node server with --watch
   const nodePort = flags.port || process.env.PORT || 3001
-  const nodeProcess = startNodeServer(serverEntry, nodePort, cwd)
+
+  let nodeProcess
+
+  if (isTypeScript) {
+    // TypeScript: Build with Vite first, then run compiled JS
+    console.log(`${cyan('Compiling TypeScript server...')}\n`)
+
+    // Get relative path for Vite
+    const relativeEntry = relative(cwd, serverEntry)
+
+    const buildResult = await buildServerWithVite(cwd, relativeEntry)
+    if (!buildResult.success) {
+      console.error(`${red('Failed to compile server')}\n`)
+      process.exit(1)
+    }
+
+    // Run the compiled JavaScript
+    const compiledEntry = resolve(cwd, 'dist/server/index.js')
+    nodeProcess = startNodeServer(compiledEntry, nodePort, cwd)
+
+    // Watch for TypeScript changes and rebuild
+    startTypeScriptWatcher(cwd, relativeEntry, nodeProcess, nodePort)
+  } else {
+    // JavaScript: Run directly with --watch
+    nodeProcess = startNodeServer(serverEntry, nodePort, cwd)
+  }
 
   // Start Vite dev server
   const vitePort = flags.vitePort || process.env.VITE_PORT || 3000
@@ -91,10 +117,15 @@ export async function run(args, flags) {
  */
 function findServerEntry(cwd) {
   const candidates = [
+    'src/server/index.ts',
     'src/server/index.js',
+    'src/server.ts',
     'src/server.js',
+    'src/index.ts',
     'src/index.js',
+    'server/index.ts',
     'server/index.js',
+    'server.ts',
     'server.js'
   ]
 
@@ -203,4 +234,84 @@ function startViteServer(port, apiPort, configPath, cwd) {
   })
 
   return proc
+}
+
+/**
+ * Build server with Vite SSR (for TypeScript)
+ */
+function buildServerWithVite(cwd, serverEntry) {
+  return new Promise((resolve) => {
+    const proc = spawn('npx', [
+      'vite', 'build',
+      '--ssr', serverEntry,
+      '--outDir', 'dist/server'
+    ], {
+      cwd,
+      stdio: 'pipe',
+      env: {
+        ...process.env,
+        NODE_ENV: 'development'
+      }
+    })
+
+    proc.on('exit', (code) => {
+      resolve({ success: code === 0 })
+    })
+
+    proc.on('error', () => {
+      resolve({ success: false })
+    })
+  })
+}
+
+/**
+ * Watch for TypeScript changes and rebuild server
+ */
+function startTypeScriptWatcher(cwd, serverEntry, nodeProcess, nodePort) {
+  const srcDir = resolve(cwd, 'src')
+
+  // Debounce rebuilds
+  let rebuildTimeout = null
+  let isRebuilding = false
+
+  const rebuild = async () => {
+    if (isRebuilding) return
+    isRebuilding = true
+
+    console.log(`\n${dim('[API]')} ${cyan('Rebuilding...')}`)
+
+    const result = await buildServerWithVite(cwd, serverEntry)
+
+    if (result.success) {
+      console.log(`${dim('[API]')} ${green('Rebuilt successfully')}`)
+      // Node --watch will automatically restart when dist/server/index.js changes
+    } else {
+      console.log(`${dim('[API]')} ${red('Build failed')}`)
+    }
+
+    isRebuilding = false
+  }
+
+  // Use fs.watch to monitor src directory for .ts changes
+  const watcher = watch(srcDir, { recursive: true }, (eventType, filename) => {
+    if (!filename) return
+
+    // Only watch TypeScript files in server-related directories
+    const isServerFile = filename.endsWith('.ts') && (
+      filename.startsWith('server') ||
+      filename.startsWith('controllers') ||
+      filename.startsWith('models') ||
+      filename.startsWith('middleware') ||
+      filename.startsWith('routes/api') ||
+      filename.startsWith('helpers')
+    )
+
+    if (isServerFile) {
+      // Debounce: wait 100ms before rebuilding
+      if (rebuildTimeout) clearTimeout(rebuildTimeout)
+      rebuildTimeout = setTimeout(rebuild, 100)
+    }
+  })
+
+  return watcher
 }

@@ -99,6 +99,10 @@ async function main() {
     scripts: {
       dev: 'basicben dev',
       build: 'basicben build',
+      ...(useTypeScript && {
+        'build:client': 'vite build',
+        'build:server': 'vite build --ssr src/server/index.ts --outDir dist/server'
+      }),
       start: 'basicben start',
       test: 'basicben test',
       migrate: 'basicben migrate',
