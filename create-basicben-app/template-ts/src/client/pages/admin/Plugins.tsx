@@ -4,20 +4,62 @@ import AdminLayout from '../../layouts/AdminLayout'
 
 interface Plugin {
   name: string
+  slug?: string
   version: string
   description?: string
   author?: string
   active: boolean
+  hasUpdate?: boolean
+  latestVersion?: string
 }
 
+interface RegistryPlugin {
+  slug: string
+  name: string
+  version: string
+  author?: string
+  description?: string
+  downloads?: number
+  rating?: number
+  icon?: string
+  premium?: boolean
+  installed?: boolean
+}
+
+type Tab = 'installed' | 'browse'
+
 export default function AdminPlugins() {
+  const [tab, setTab] = useState<Tab>('installed')
   const [plugins, setPlugins] = useState<Plugin[]>([])
+  const [registryPlugins, setRegistryPlugins] = useState<RegistryPlugin[]>([])
   const [loading, setLoading] = useState(true)
+  const [browsing, setBrowsing] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [installing, setInstalling] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     loadPlugins()
   }, [])
+
+  useEffect(() => {
+    if (tab === 'browse') {
+      browsePlugins()
+    }
+  }, [tab])
+
+  // Debounced search
+  useEffect(() => {
+    if (tab === 'browse') {
+      if (searchTimeout) clearTimeout(searchTimeout)
+      const timeout = setTimeout(() => {
+        browsePlugins(searchQuery)
+      }, 300)
+      setSearchTimeout(timeout)
+      return () => clearTimeout(timeout)
+    }
+  }, [searchQuery])
 
   const loadPlugins = async () => {
     try {
@@ -27,6 +69,25 @@ export default function AdminPlugins() {
       console.error('Failed to load plugins:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const browsePlugins = async (search?: string) => {
+    setBrowsing(true)
+    try {
+      const params = search ? `?search=${encodeURIComponent(search)}` : ''
+      const res = await api.get(`/api/registry/plugins${params}`)
+      const installedSlugs = plugins.map(p => p.slug || p.name)
+
+      setRegistryPlugins((res.data?.plugins || []).map((p: RegistryPlugin) => ({
+        ...p,
+        installed: installedSlugs.includes(p.slug)
+      })))
+    } catch (error) {
+      console.error('Failed to browse plugins:', error)
+      setRegistryPlugins([])
+    } finally {
+      setBrowsing(false)
     }
   }
 
@@ -53,6 +114,42 @@ export default function AdminPlugins() {
     }
   }
 
+  const handleInstall = async (slug: string) => {
+    if (!confirm(`Install plugin "${slug}"?`)) return
+
+    setInstalling(slug)
+
+    try {
+      await api.post('/api/registry/plugins/install', { slug })
+      alert(`Plugin "${slug}" installed successfully!`)
+
+      // Refresh installed list
+      await loadPlugins()
+
+      // Mark as installed in registry list
+      setRegistryPlugins(registryPlugins.map(p => ({
+        ...p,
+        installed: p.slug === slug ? true : p.installed
+      })))
+    } catch (error: any) {
+      alert(error.message || 'Failed to install plugin')
+    } finally {
+      setInstalling(null)
+    }
+  }
+
+  const renderStars = (rating: number = 0) => {
+    const stars = []
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <span key={i} style={{ color: i <= rating ? '#f59e0b' : '#d1d5db' }}>
+          ★
+        </span>
+      )
+    }
+    return stars
+  }
+
   if (loading) {
     return (
       <AdminLayout title="Plugins">
@@ -63,75 +160,309 @@ export default function AdminPlugins() {
 
   return (
     <AdminLayout title="Plugins">
-      <div className="admin-card">
-        <div className="admin-card-header">
-          <h2 className="admin-card-title">Installed Plugins</h2>
-        </div>
+      <style>{pluginStyles}</style>
 
-        {plugins.length === 0 ? (
-          <p style={{ color: '#6b7280', textAlign: 'center', padding: '2rem' }}>
-            No plugins installed. Add plugins to the <code>plugins</code> directory.
-          </p>
-        ) : (
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Plugin</th>
-                <th>Version</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plugins.map(plugin => (
-                <tr key={plugin.name}>
-                  <td>
-                    <div>
-                      <strong>{plugin.name}</strong>
-                      {plugin.description && (
-                        <p style={{ margin: '0.25rem 0 0', color: '#6b7280', fontSize: '0.875rem' }}>
-                          {plugin.description}
-                        </p>
+      {/* Tabs */}
+      <div className="plugin-tabs">
+        <button
+          className={`plugin-tab ${tab === 'installed' ? 'active' : ''}`}
+          onClick={() => setTab('installed')}
+        >
+          Installed ({plugins.length})
+        </button>
+        <button
+          className={`plugin-tab ${tab === 'browse' ? 'active' : ''}`}
+          onClick={() => setTab('browse')}
+        >
+          Browse Plugins
+        </button>
+      </div>
+
+      {/* Installed Plugins Tab */}
+      {tab === 'installed' && (
+        <div className="admin-card">
+          <div className="admin-card-header">
+            <h2 className="admin-card-title">Installed Plugins</h2>
+          </div>
+
+          {plugins.length === 0 ? (
+            <div className="plugin-empty">
+              <p>No plugins installed.</p>
+              <button
+                onClick={() => setTab('browse')}
+                className="admin-btn admin-btn-primary"
+              >
+                Browse Plugins
+              </button>
+            </div>
+          ) : (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Plugin</th>
+                  <th>Version</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plugins.map(plugin => (
+                  <tr key={plugin.name}>
+                    <td>
+                      <div>
+                        <strong>{plugin.name}</strong>
+                        {plugin.description && (
+                          <p style={{ margin: '0.25rem 0 0', color: '#6b7280', fontSize: '0.875rem' }}>
+                            {plugin.description}
+                          </p>
+                        )}
+                        {plugin.author && (
+                          <p style={{ margin: '0.25rem 0 0', color: '#9ca3af', fontSize: '0.75rem' }}>
+                            by {plugin.author}
+                          </p>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <span>v{plugin.version}</span>
+                      {plugin.hasUpdate && (
+                        <span className="admin-badge admin-badge-info" style={{ marginLeft: '0.5rem' }}>
+                          Update: {plugin.latestVersion}
+                        </span>
                       )}
-                      {plugin.author && (
-                        <p style={{ margin: '0.25rem 0 0', color: '#9ca3af', fontSize: '0.75rem' }}>
-                          by {plugin.author}
-                        </p>
+                    </td>
+                    <td>
+                      <span className={`admin-badge ${plugin.active ? 'admin-badge-success' : 'admin-badge-warning'}`}>
+                        {plugin.active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        onClick={() => handleToggle(plugin.name, plugin.active)}
+                        className={`admin-btn ${plugin.active ? 'admin-btn-secondary' : 'admin-btn-primary'}`}
+                        disabled={toggling === plugin.name}
+                      >
+                        {toggling === plugin.name
+                          ? 'Processing...'
+                          : (plugin.active ? 'Deactivate' : 'Activate')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* Browse Plugins Tab */}
+      {tab === 'browse' && (
+        <div className="admin-card">
+          <div className="admin-card-header">
+            <h2 className="admin-card-title">Plugin Registry</h2>
+            <div className="plugin-search">
+              <input
+                type="text"
+                placeholder="Search plugins..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="admin-input"
+                style={{ width: '250px' }}
+              />
+            </div>
+          </div>
+
+          {browsing ? (
+            <div className="plugin-loading">Searching plugins...</div>
+          ) : registryPlugins.length === 0 ? (
+            <div className="plugin-empty">
+              <p>No plugins found. Try a different search.</p>
+            </div>
+          ) : (
+            <div className="plugin-grid">
+              {registryPlugins.map(plugin => (
+                <div key={plugin.slug} className="plugin-card">
+                  <div className="plugin-card-icon">
+                    {plugin.icon ? (
+                      <img src={plugin.icon} alt={plugin.name} />
+                    ) : (
+                      <span>🔌</span>
+                    )}
+                  </div>
+                  <div className="plugin-card-content">
+                    <h3 className="plugin-card-title">
+                      {plugin.name}
+                      {plugin.premium && (
+                        <span className="admin-badge admin-badge-warning" style={{ marginLeft: '0.5rem' }}>
+                          Premium
+                        </span>
+                      )}
+                    </h3>
+                    <div className="plugin-card-rating">
+                      {renderStars(plugin.rating)}
+                      {plugin.downloads && (
+                        <span className="plugin-downloads">
+                          {plugin.downloads.toLocaleString()} downloads
+                        </span>
                       )}
                     </div>
-                  </td>
-                  <td>v{plugin.version}</td>
-                  <td>
-                    <span className={`admin-badge ${plugin.active ? 'admin-badge-success' : 'admin-badge-warning'}`}>
-                      {plugin.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      onClick={() => handleToggle(plugin.name, plugin.active)}
-                      className={`admin-btn ${plugin.active ? 'admin-btn-secondary' : 'admin-btn-primary'}`}
-                      disabled={toggling === plugin.name}
-                    >
-                      {toggling === plugin.name
-                        ? 'Processing...'
-                        : (plugin.active ? 'Deactivate' : 'Activate')}
-                    </button>
-                  </td>
-                </tr>
+                    <p className="plugin-card-description">
+                      {plugin.description || 'No description available'}
+                    </p>
+                    <p className="plugin-card-meta">
+                      v{plugin.version} {plugin.author && `by ${plugin.author}`}
+                    </p>
+                  </div>
+                  <div className="plugin-card-actions">
+                    {plugin.installed ? (
+                      <span className="admin-badge admin-badge-success">Installed</span>
+                    ) : (
+                      <button
+                        onClick={() => handleInstall(plugin.slug)}
+                        className="admin-btn admin-btn-primary"
+                        disabled={installing === plugin.slug}
+                      >
+                        {installing === plugin.slug ? 'Installing...' : 'Install'}
+                      </button>
+                    )}
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="admin-card">
-        <h3 className="admin-card-title">Add New Plugin</h3>
-        <p style={{ color: '#6b7280' }}>
-          To add a new plugin, create a JavaScript file or directory in <code>plugins/</code>.
-          Plugins can extend BasicBen with custom functionality through hooks and routes.
-          See the documentation for more details on creating plugins.
-        </p>
-      </div>
+            </div>
+          )}
+        </div>
+      )}
     </AdminLayout>
   )
 }
+
+const pluginStyles = `
+  .plugin-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .plugin-tab {
+    padding: 0.75rem 1.5rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem 0.5rem 0 0;
+    cursor: pointer;
+    font-weight: 500;
+    color: #6b7280;
+  }
+
+  .plugin-tab.active {
+    background: white;
+    border-bottom-color: white;
+    color: #4f46e5;
+    margin-bottom: -1px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .plugin-search {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .plugin-empty {
+    text-align: center;
+    padding: 3rem;
+    color: #6b7280;
+  }
+
+  .plugin-loading {
+    text-align: center;
+    padding: 2rem;
+    color: #6b7280;
+  }
+
+  .plugin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+
+  .plugin-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    display: flex;
+    gap: 1rem;
+    transition: box-shadow 0.15s;
+  }
+
+  .plugin-card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .plugin-card-icon {
+    width: 48px;
+    height: 48px;
+    background: #f3f4f6;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+
+  .plugin-card-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0.5rem;
+  }
+
+  .plugin-card-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .plugin-card-title {
+    margin: 0 0 0.25rem;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .plugin-card-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  .plugin-downloads {
+    color: #6b7280;
+    font-size: 0.75rem;
+  }
+
+  .plugin-card-description {
+    color: #6b7280;
+    font-size: 0.875rem;
+    margin: 0 0 0.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .plugin-card-meta {
+    color: #9ca3af;
+    font-size: 0.75rem;
+    margin: 0;
+  }
+
+  .plugin-card-actions {
+    display: flex;
+    align-items: flex-start;
+    flex-shrink: 0;
+  }
+`

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useAuth, useNavigate, usePath } from '@basicbenframework/core/client'
+import UpdateBanner from '../components/admin/UpdateBanner'
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -27,6 +28,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     { path: '/admin/media', label: 'Media', icon: '🖼️' },
     { path: '/admin/themes', label: 'Themes', icon: '🎨' },
     { path: '/admin/plugins', label: 'Plugins', icon: '🔌' },
+    { path: '/admin/updates', label: 'Updates', icon: '⬆️' },
     { path: '/admin/settings', label: 'Settings', icon: '⚙️' },
   ]
 
@@ -71,6 +73,9 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
 
       {/* Main Content */}
       <div className={`admin-main ${sidebarOpen ? '' : 'expanded'}`}>
+        {/* Update Banner */}
+        <UpdateBanner />
+
         {/* Header */}
         <header className="admin-header">
           <div className="admin-header-left">

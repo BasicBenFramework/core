@@ -141,6 +141,119 @@ The frontend uses reusable components:
 
 ---
 
+## Blogging Platform
+
+BasicBen includes WordPress-like blogging features out of the box:
+
+### Content Management
+- **Posts** — Create, edit, publish with drafts and scheduling
+- **Pages** — Static pages with hierarchy support
+- **Categories** — Hierarchical post organization
+- **Tags** — Flat tagging system
+- **Comments** — Threaded comments with moderation
+- **Media Library** — Upload and manage images/files
+
+### SEO & Feeds
+- Meta titles and descriptions per post/page
+- Auto-generated slugs
+- RSS feed (`/feed.xml`)
+- JSON feed (`/feed.json`)
+- Sitemap (`/sitemap.xml`)
+
+### Admin Dashboard
+Navigate to `/admin` to access:
+- Dashboard with stats and quick actions
+- Post and page management
+- Category and tag management
+- Comment moderation
+- Media library
+- Theme and plugin management
+- Site settings
+
+---
+
+## Plugins & Themes
+
+BasicBen supports a WordPress-like plugin and theme ecosystem.
+
+### Installing Plugins
+
+```bash
+# Search for plugins
+basicben plugin search seo
+
+# Install a plugin
+basicben plugin install seo-tools
+
+# Update all plugins
+basicben plugin update --all
+```
+
+### Installing Themes
+
+```bash
+# Search for themes
+basicben theme search blog
+
+# Install and activate a theme
+basicben theme install developer-blog
+basicben theme activate developer-blog
+```
+
+### Custom Registries
+
+Add private or enterprise registries:
+
+```bash
+# Add a custom registry
+basicben registry add https://plugins.mycompany.com
+
+# List configured registries
+basicben registry list
+```
+
+### Creating Plugins
+
+Plugins are JavaScript modules in the `plugins/` directory:
+
+```js
+// plugins/hello-world.js
+export default {
+  name: 'hello-world',
+  version: '1.0.0',
+
+  hooks: {
+    'request.before': async (ctx) => {
+      console.log('Request received!')
+      return ctx
+    }
+  },
+
+  initialize: async () => {
+    console.log('Plugin activated!')
+  }
+}
+```
+
+### Creating Themes
+
+Themes live in the `themes/` directory with this structure:
+
+```
+themes/my-theme/
+├── theme.json           # Metadata and settings
+├── layouts/
+│   ├── DefaultLayout.tsx
+│   └── PostLayout.tsx
+├── components/
+│   ├── Header.tsx
+│   └── Footer.tsx
+└── styles/
+    └── main.css
+```
+
+---
+
 ## CLI
 
 ```bash
@@ -163,6 +276,33 @@ basicben migrate                   # Run all pending migrations
 basicben migrate:rollback          # Roll back the last batch
 basicben migrate:fresh             # Drop everything and re-run all
 basicben migrate:status            # Show which migrations have run
+
+# Updates
+basicben updates check             # Check for available updates
+basicben updates apply             # Apply core framework update
+basicben updates changelog         # View changelog for latest version
+
+# Plugins
+basicben plugin list               # List installed plugins
+basicben plugin search <query>     # Search plugin registry
+basicben plugin install <slug>     # Install a plugin
+basicben plugin update <slug>      # Update a plugin
+basicben plugin update --all       # Update all plugins
+basicben plugin remove <slug>      # Remove a plugin
+
+# Themes
+basicben theme list                # List installed themes
+basicben theme search <query>      # Search theme registry
+basicben theme install <slug>      # Install a theme
+basicben theme activate <slug>     # Activate a theme
+basicben theme update <slug>       # Update a theme
+
+# Registry & License
+basicben registry list             # List configured registries
+basicben registry add <url>        # Add a custom registry
+basicben registry ping             # Test registry connections
+basicben license set <key>         # Set license key
+basicben license status            # Show license status
 
 # Help
 basicben help                      # Show all commands
@@ -516,6 +656,82 @@ export default {
 
   // Auto-load middleware from src/middleware (default: true)
   autoloadMiddleware: true
+}
+```
+
+---
+
+## Hook System
+
+BasicBen includes a WordPress-inspired hook system for extensibility:
+
+```js
+import { hooks, HOOKS } from '@basicbenframework/core'
+
+// Register a callback
+hooks.on(HOOKS.REQUEST_BEFORE, async (ctx) => {
+  console.log('Request:', ctx.req.url)
+  return ctx
+})
+
+// Fire a hook (for plugin authors)
+await hooks.fire('custom.event', { data: 'value' })
+
+// Filter data through callbacks
+const result = await hooks.filter('content.render', htmlContent)
+```
+
+### Available Hooks
+
+| Hook | Description |
+|------|-------------|
+| `server.starting` | Before server starts |
+| `server.started` | Server is ready |
+| `request.before` | Before route handler |
+| `request.after` | After route handler |
+| `post.created` | After post is created |
+| `comment.created` | After comment is created |
+| `theme.activated` | When theme is activated |
+| `plugin.activated` | When plugin is activated |
+
+---
+
+## Updates
+
+BasicBen includes an automatic update system:
+
+```js
+import { updates } from '@basicbenframework/core'
+
+// Check for updates
+const { core, plugins, themes } = await updates.checkAll()
+
+if (core.available) {
+  console.log(`Update available: ${core.current} → ${core.latest}`)
+}
+
+// Apply update (self-hosted only)
+await updates.updateCore()
+
+// Backup management
+await updates.createBackup()
+const backups = await updates.listBackups()
+await updates.restoreBackup(backupId)
+```
+
+### Cloud vs Self-Hosted
+
+BasicBen supports both deployment models:
+
+```js
+import { isCloud, isSelfHosted } from '@basicbenframework/core'
+
+if (isCloud()) {
+  // Running on BasicBen Cloud - updates are automatic
+}
+
+if (isSelfHosted()) {
+  // Self-hosted - you control updates
 }
 ```
 
