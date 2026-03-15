@@ -296,3 +296,11 @@ export { plugins } from '../plugins/index.js'
 export { loadPlugins } from '../plugins/loader.js'
 export { themes } from '../themes/index.js'
 export { loadThemes } from '../themes/loader.js'
+export { updates } from '../updates/index.js'
+export {
+  getEnvironment,
+  isCloud,
+  isSelfHosted,
+  getVersion,
+  canManualUpdate
+} from './environment.js'
