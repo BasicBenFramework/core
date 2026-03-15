@@ -21,7 +21,11 @@
     "./client": "./src/client/index.js",
     "./validation": "./src/validation/index.js",
     "./auth": "./src/auth/jwt.js",
-    "./db": "./src/db/index.js"
+    "./db": "./src/db/index.js",
+    "./hooks": "./src/hooks/index.js",
+    "./plugins": "./src/plugins/index.js",
+    "./themes": "./src/themes/index.js",
+    "./updates": "./src/updates/index.js"
   },
   "engines": {
     "node": ">=25.8.1"
