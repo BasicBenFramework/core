@@ -31,6 +31,13 @@ const commands = {
   'db:seed': () => import('../commands/seed.js'), // alias
   'make:seed': () => import('../commands/make-seed.js'),
 
+  // Updates & Package Management
+  updates: () => import('../commands/updates.js'),
+  plugin: () => import('../commands/plugin.js'),
+  theme: () => import('../commands/theme.js'),
+  registry: () => import('../commands/registry.js'),
+  license: () => import('../commands/license.js'),
+
   // Help
   help: () => import('../commands/help.js')
 }
@@ -120,6 +127,63 @@ export const commandMeta = {
     description: 'Generate a new seed file',
     usage: 'basicben make:seed <name>',
     example: 'basicben make:seed users'
+  },
+
+  updates: {
+    description: 'Check for and apply framework updates',
+    usage: 'basicben updates [check|apply|changelog]',
+    options: {
+      'check': 'Check for available updates',
+      'apply': 'Apply core update',
+      'changelog': 'View changelog for latest version',
+      '--json': 'Output as JSON',
+      '-y, --yes': 'Skip confirmation prompts'
+    }
+  },
+  plugin: {
+    description: 'Manage plugins',
+    usage: 'basicben plugin <command> [options]',
+    options: {
+      'list': 'List installed plugins',
+      'search <query>': 'Search plugin registry',
+      'install <slug>': 'Install a plugin',
+      'update <slug>': 'Update a plugin',
+      'update --all': 'Update all plugins',
+      'remove <slug>': 'Remove a plugin',
+      'activate <slug>': 'Activate a plugin',
+      'deactivate <slug>': 'Deactivate a plugin'
+    }
+  },
+  theme: {
+    description: 'Manage themes',
+    usage: 'basicben theme <command> [options]',
+    options: {
+      'list': 'List installed themes',
+      'search <query>': 'Search theme registry',
+      'install <slug>': 'Install a theme',
+      'update <slug>': 'Update a theme',
+      'remove <slug>': 'Remove a theme',
+      'activate <slug>': 'Activate a theme'
+    }
+  },
+  registry: {
+    description: 'Manage plugin/theme registries',
+    usage: 'basicben registry <command> [options]',
+    options: {
+      'list': 'List configured registries',
+      'add <url>': 'Add a registry',
+      'remove <url>': 'Remove a registry',
+      'ping [url]': 'Test registry connection(s)'
+    }
+  },
+  license: {
+    description: 'Manage license key',
+    usage: 'basicben license <command>',
+    options: {
+      'set <key>': 'Set license key',
+      'status': 'Show license status',
+      'remove': 'Remove license key'
+    }
   },
 
   help: {
