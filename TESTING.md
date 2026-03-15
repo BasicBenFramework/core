@@ -120,6 +120,10 @@ Full end-to-end tests that:
 | `GET /api/themes` | Theme management |
 | `GET /api/themes/active` | Active theme |
 | `GET /api/plugins` | Plugin management |
+| `GET /api/updates/check` | Check for updates |
+| `GET /api/registry/plugins` | Browse plugin registry |
+| `GET /api/registry/themes` | Browse theme registry |
+| `GET /api/backups` | List backups |
 | `GET /feed.xml` | RSS feed |
 | `GET /feed.json` | JSON feed |
 | `GET /sitemap.xml` | Sitemap |
@@ -185,6 +189,7 @@ npm run dev
 - **Media Library**: Upload files at `/admin/media`
 - **Themes**: Switch themes at `/admin/themes`
 - **Plugins**: Enable/disable plugins at `/admin/plugins`
+- **Updates**: Check for updates at `/admin/updates`
 - **Settings**: Site configuration at `/admin/settings`
 - **Feeds**: Check `/feed.xml`, `/feed.json`, `/sitemap.xml`
 

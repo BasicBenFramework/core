@@ -20,6 +20,7 @@ import settingsRoutes from '../routes/api/settings'
 import feedRoutes from '../routes/api/feed'
 import themesRoutes from '../routes/api/themes'
 import pluginsRoutes from '../routes/api/plugins'
+import updatesRoutes from '../routes/api/updates'
 
 // Determine static directory based on environment
 // In production, static files are in dist/client (relative to app root/cwd)
@@ -49,6 +50,7 @@ settingsRoutes(router)
 feedRoutes(router)
 themesRoutes(router)
 pluginsRoutes(router)
+updatesRoutes(router)
 router.applyTo(app)
 
 const port = process.env.PORT || 3001

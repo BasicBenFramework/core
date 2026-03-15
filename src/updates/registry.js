@@ -218,8 +218,13 @@ export class RegistryClient {
     const query = params.toString()
     const path = `/plugins${query ? `?${query}` : ''}`
 
-    const result = await this.tryRegistries(path)
-    return result?.data || { plugins: [], total: 0 }
+    try {
+      const result = await this.tryRegistries(path)
+      return result?.data || { plugins: [], total: 0 }
+    } catch {
+      // Return empty list if registry is unavailable
+      return { plugins: [], total: 0 }
+    }
   }
 
   /**
@@ -293,8 +298,13 @@ export class RegistryClient {
     const query = params.toString()
     const path = `/themes${query ? `?${query}` : ''}`
 
-    const result = await this.tryRegistries(path)
-    return result?.data || { themes: [], total: 0 }
+    try {
+      const result = await this.tryRegistries(path)
+      return result?.data || { themes: [], total: 0 }
+    } catch {
+      // Return empty list if registry is unavailable
+      return { themes: [], total: 0 }
+    }
   }
 
   /**

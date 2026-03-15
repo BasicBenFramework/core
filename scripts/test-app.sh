@@ -500,6 +500,59 @@ if [ -n "$AUTH_TOKEN" ]; then
     log_error "GET /api/plugins failed"
     ((TESTS_FAILED++))
   fi
+
+  # ---- Updates API ----
+  echo ""
+  log_info "Testing Updates API..."
+
+  # Check for updates
+  UPDATES_RESPONSE=$(curl -s http://localhost:3001/api/updates/check \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$UPDATES_RESPONSE" | grep -q "core\|plugins\|themes"; then
+    log_success "GET /api/updates/check returns update info"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/updates/check failed"
+    echo -e "  ${DIM}Response: $UPDATES_RESPONSE${NC}"
+    ((TESTS_FAILED++))
+  fi
+
+  # Browse registry plugins
+  REGISTRY_PLUGINS=$(curl -s http://localhost:3001/api/registry/plugins \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$REGISTRY_PLUGINS" | grep -q "plugins\|\[\]"; then
+    log_success "GET /api/registry/plugins returns plugins list"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/registry/plugins failed"
+    ((TESTS_FAILED++))
+  fi
+
+  # Browse registry themes
+  REGISTRY_THEMES=$(curl -s http://localhost:3001/api/registry/themes \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$REGISTRY_THEMES" | grep -q "themes\|\[\]"; then
+    log_success "GET /api/registry/themes returns themes list"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/registry/themes failed"
+    ((TESTS_FAILED++))
+  fi
+
+  # List backups
+  BACKUPS_RESPONSE=$(curl -s http://localhost:3001/api/backups \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$BACKUPS_RESPONSE" | grep -q "backups\|\[\]"; then
+    log_success "GET /api/backups returns backups list"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/backups failed"
+    ((TESTS_FAILED++))
+  fi
 fi
 
 # ---- Feed Endpoints (Public) ----
