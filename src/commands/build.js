@@ -40,8 +40,8 @@ export async function run(args, flags) {
   // Build server
   console.log(`${cyan('Building server...')}\n`)
 
-  if (isTypeScript) {
-    // Use Vite SSR build for TypeScript projects
+  if (serverEntry) {
+    // Use Vite SSR build for both TypeScript and JavaScript projects
     const serverBuild = await runViteSSRBuild(cwd, serverEntry)
     if (!serverBuild.success) {
       console.error(`\n${red('Server build failed')}\n`)
@@ -49,7 +49,7 @@ export async function run(args, flags) {
     }
     console.log(`${green('✓')} Server compiled to ${dim('dist/server')}\n`)
   } else {
-    // Copy server files for JavaScript projects
+    // No custom server, copy default server files
     await prepareServer(cwd)
     console.log(`${green('✓')} Server prepared in ${dim('dist/server')}\n`)
   }

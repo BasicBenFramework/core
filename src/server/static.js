@@ -84,7 +84,7 @@ export function serveStatic(options = {}) {
       }
     }
 
-    const fullPath = join(root, filePath)
+    let fullPath = join(root, filePath)
 
     // Check if file exists
     let stat
@@ -100,6 +100,7 @@ export function serveStatic(options = {}) {
       try {
         stat = statSync(indexPath)
         if (!stat.isFile()) return next()
+        fullPath = indexPath  // Update fullPath to point to the index file
       } catch {
         return next()
       }
