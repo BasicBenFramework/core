@@ -13,6 +13,10 @@ npm run test:auth
 npm run test:server
 npm run test:cli
 npm run test:scaffolding
+
+# Run integration tests (creates test app)
+npm run test:app        # JavaScript template
+npm run test:app:ts     # TypeScript template
 ```
 
 ---
@@ -84,6 +88,42 @@ Tests for:
 - File generation from stubs
 - Name transformations
 
+### Integration Tests (`scripts/test-app.sh`)
+
+```bash
+npm run test:app      # JavaScript template
+npm run test:app:ts   # TypeScript template
+```
+
+Full end-to-end tests that:
+1. Create a test app from template
+2. Run migrations
+3. Start dev server
+4. Test all API endpoints
+5. Build for production
+6. Test production server
+
+**API Endpoints Tested:**
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/auth/register` | User registration |
+| `POST /api/auth/login` | User login |
+| `GET /api/feed` | Public feed |
+| `GET/POST /api/posts` | Posts CRUD |
+| `GET/POST /api/categories` | Categories CRUD |
+| `GET/POST /api/tags` | Tags CRUD |
+| `GET/POST /api/pages` | Pages CRUD |
+| `GET/POST /api/posts/:id/comments` | Comments |
+| `GET /api/media` | Media library |
+| `GET /api/settings` | Site settings |
+| `GET /api/themes` | Theme management |
+| `GET /api/themes/active` | Active theme |
+| `GET /api/plugins` | Plugin management |
+| `GET /feed.xml` | RSS feed |
+| `GET /feed.json` | JSON feed |
+| `GET /sitemap.xml` | Sitemap |
+
 ---
 
 ## Running Tests
@@ -116,7 +156,7 @@ node --test --experimental-test-coverage src/**/*.test.js
 
 ## Testing with my-test-app
 
-Create a local test app to test the full framework integration.
+Create a local test app to test the full framework integration, including the blogging platform features.
 
 ### Quick setup (recommended)
 
@@ -134,6 +174,19 @@ Then start the dev server:
 cd my-test-app
 npm run dev
 ```
+
+### Features to test manually
+
+- **Admin Dashboard**: Navigate to `/admin`
+- **Posts**: Create, edit, delete posts at `/admin/posts`
+- **Pages**: Static pages at `/admin/pages`
+- **Categories & Tags**: Organize content at `/admin/categories` and `/admin/tags`
+- **Comments**: Moderate comments at `/admin/comments`
+- **Media Library**: Upload files at `/admin/media`
+- **Themes**: Switch themes at `/admin/themes`
+- **Plugins**: Enable/disable plugins at `/admin/plugins`
+- **Settings**: Site configuration at `/admin/settings`
+- **Feeds**: Check `/feed.xml`, `/feed.json`, `/sitemap.xml`
 
 ### Manual setup
 

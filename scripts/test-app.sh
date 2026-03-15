@@ -290,11 +290,250 @@ if [ -n "$AUTH_TOKEN" ]; then
   if echo "$CREATE_POST" | grep -q "Test Post"; then
     log_success "POST /api/posts creates post"
     ((TESTS_PASSED++))
+    POST_ID=$(echo "$CREATE_POST" | grep -o '"id":[0-9]*' | head -1 | cut -d':' -f2)
   else
     log_error "POST /api/posts failed"
     echo -e "  ${DIM}Response: $CREATE_POST${NC}"
     ((TESTS_FAILED++))
   fi
+
+  # ---- Categories API ----
+  echo ""
+  log_info "Testing Categories API..."
+
+  # Get categories
+  CATEGORIES_RESPONSE=$(curl -s http://localhost:3001/api/categories \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$CATEGORIES_RESPONSE" | grep -q "\["; then
+    log_success "GET /api/categories returns array"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/categories failed"
+    ((TESTS_FAILED++))
+  fi
+
+  # Create category
+  CREATE_CATEGORY=$(curl -s -X POST http://localhost:3001/api/categories \
+    -H "Authorization: Bearer $AUTH_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"Test Category","slug":"test-category"}')
+
+  if echo "$CREATE_CATEGORY" | grep -q "Test Category"; then
+    log_success "POST /api/categories creates category"
+    ((TESTS_PASSED++))
+  else
+    log_error "POST /api/categories failed"
+    echo -e "  ${DIM}Response: $CREATE_CATEGORY${NC}"
+    ((TESTS_FAILED++))
+  fi
+
+  # ---- Tags API ----
+  echo ""
+  log_info "Testing Tags API..."
+
+  # Get tags
+  TAGS_RESPONSE=$(curl -s http://localhost:3001/api/tags \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$TAGS_RESPONSE" | grep -q "\["; then
+    log_success "GET /api/tags returns array"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/tags failed"
+    ((TESTS_FAILED++))
+  fi
+
+  # Create tag
+  CREATE_TAG=$(curl -s -X POST http://localhost:3001/api/tags \
+    -H "Authorization: Bearer $AUTH_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"Test Tag","slug":"test-tag"}')
+
+  if echo "$CREATE_TAG" | grep -q "Test Tag"; then
+    log_success "POST /api/tags creates tag"
+    ((TESTS_PASSED++))
+  else
+    log_error "POST /api/tags failed"
+    echo -e "  ${DIM}Response: $CREATE_TAG${NC}"
+    ((TESTS_FAILED++))
+  fi
+
+  # ---- Pages API ----
+  echo ""
+  log_info "Testing Pages API..."
+
+  # Get pages
+  PAGES_RESPONSE=$(curl -s http://localhost:3001/api/pages \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$PAGES_RESPONSE" | grep -q "\["; then
+    log_success "GET /api/pages returns array"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/pages failed"
+    ((TESTS_FAILED++))
+  fi
+
+  # Create page
+  CREATE_PAGE=$(curl -s -X POST http://localhost:3001/api/pages \
+    -H "Authorization: Bearer $AUTH_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"title":"About Us","slug":"about","content":"This is our about page content."}')
+
+  if echo "$CREATE_PAGE" | grep -q "About Us"; then
+    log_success "POST /api/pages creates page"
+    ((TESTS_PASSED++))
+  else
+    log_error "POST /api/pages failed"
+    echo -e "  ${DIM}Response: $CREATE_PAGE${NC}"
+    ((TESTS_FAILED++))
+  fi
+
+  # ---- Comments API ----
+  echo ""
+  log_info "Testing Comments API..."
+
+  if [ -n "$POST_ID" ]; then
+    # Get comments for post
+    COMMENTS_RESPONSE=$(curl -s "http://localhost:3001/api/posts/$POST_ID/comments")
+
+    if echo "$COMMENTS_RESPONSE" | grep -q "\["; then
+      log_success "GET /api/posts/:id/comments returns array"
+      ((TESTS_PASSED++))
+    else
+      log_error "GET /api/posts/:id/comments failed"
+      ((TESTS_FAILED++))
+    fi
+
+    # Create comment
+    CREATE_COMMENT=$(curl -s -X POST "http://localhost:3001/api/posts/$POST_ID/comments" \
+      -H "Authorization: Bearer $AUTH_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"content":"This is a test comment on the post."}')
+
+    if echo "$CREATE_COMMENT" | grep -q "test comment"; then
+      log_success "POST /api/posts/:id/comments creates comment"
+      ((TESTS_PASSED++))
+    else
+      log_error "POST /api/posts/:id/comments failed"
+      echo -e "  ${DIM}Response: $CREATE_COMMENT${NC}"
+      ((TESTS_FAILED++))
+    fi
+  else
+    log_info "Skipping comments tests (no post ID)"
+  fi
+
+  # ---- Media API ----
+  echo ""
+  log_info "Testing Media API..."
+
+  # Get media
+  MEDIA_RESPONSE=$(curl -s http://localhost:3001/api/media \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$MEDIA_RESPONSE" | grep -q "\["; then
+    log_success "GET /api/media returns array"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/media failed"
+    ((TESTS_FAILED++))
+  fi
+
+  # ---- Settings API ----
+  echo ""
+  log_info "Testing Settings API..."
+
+  # Get settings
+  SETTINGS_RESPONSE=$(curl -s http://localhost:3001/api/settings \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$SETTINGS_RESPONSE" | grep -q "settings"; then
+    log_success "GET /api/settings returns settings object"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/settings failed"
+    ((TESTS_FAILED++))
+  fi
+
+  # ---- Themes API ----
+  echo ""
+  log_info "Testing Themes API..."
+
+  # Get themes
+  THEMES_RESPONSE=$(curl -s http://localhost:3001/api/themes \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$THEMES_RESPONSE" | grep -q "\["; then
+    log_success "GET /api/themes returns array"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/themes failed"
+    ((TESTS_FAILED++))
+  fi
+
+  # Get active theme
+  ACTIVE_THEME=$(curl -s http://localhost:3001/api/themes/active \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$ACTIVE_THEME" | grep -q "theme\|name\|default"; then
+    log_success "GET /api/themes/active returns theme info"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/themes/active failed"
+    echo -e "  ${DIM}Response: $ACTIVE_THEME${NC}"
+    ((TESTS_FAILED++))
+  fi
+
+  # ---- Plugins API ----
+  echo ""
+  log_info "Testing Plugins API..."
+
+  # Get plugins
+  PLUGINS_RESPONSE=$(curl -s http://localhost:3001/api/plugins \
+    -H "Authorization: Bearer $AUTH_TOKEN")
+
+  if echo "$PLUGINS_RESPONSE" | grep -q "\["; then
+    log_success "GET /api/plugins returns array"
+    ((TESTS_PASSED++))
+  else
+    log_error "GET /api/plugins failed"
+    ((TESTS_FAILED++))
+  fi
+fi
+
+# ---- Feed Endpoints (Public) ----
+echo ""
+log_info "Testing Feed endpoints..."
+
+# RSS Feed
+RSS_RESPONSE=$(curl -s http://localhost:3001/feed.xml)
+if echo "$RSS_RESPONSE" | grep -q "xml\|rss\|channel"; then
+  log_success "GET /feed.xml returns RSS feed"
+  ((TESTS_PASSED++))
+else
+  log_error "GET /feed.xml failed"
+  ((TESTS_FAILED++))
+fi
+
+# JSON Feed
+JSON_FEED=$(curl -s http://localhost:3001/feed.json)
+if echo "$JSON_FEED" | grep -q "version\|title\|items"; then
+  log_success "GET /feed.json returns JSON feed"
+  ((TESTS_PASSED++))
+else
+  log_error "GET /feed.json failed"
+  ((TESTS_FAILED++))
+fi
+
+# Sitemap
+SITEMAP=$(curl -s http://localhost:3001/sitemap.xml)
+if echo "$SITEMAP" | grep -q "xml\|urlset\|url"; then
+  log_success "GET /sitemap.xml returns sitemap"
+  ((TESTS_PASSED++))
+else
+  log_error "GET /sitemap.xml failed"
+  ((TESTS_FAILED++))
 fi
 
 # Unauthenticated should fail
