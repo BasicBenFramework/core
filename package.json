@@ -35,6 +35,7 @@
     "test:cli": "node --test src/cli/**/*.test.js",
     "test:scaffolding": "node --test src/scaffolding/**/*.test.js",
     "test:app": "./scripts/test-app.sh",
+    "test:app:ts": "./scripts/test-app.sh --typescript",
     "release": "./scripts/publish.sh"
   },
   "keywords": [

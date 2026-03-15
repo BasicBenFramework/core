@@ -2,13 +2,24 @@
 
 # Test script for BasicBen framework
 # Deletes my-test-app, creates a fresh one, and runs migrations
+#
+# Usage:
+#   ./scripts/test-app.sh              # JavaScript template
+#   ./scripts/test-app.sh --typescript # TypeScript template
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "=== BasicBen Test App Setup ==="
+# Check for --typescript flag
+USE_TYPESCRIPT=""
+if [[ "$1" == "--typescript" || "$1" == "--ts" ]]; then
+  USE_TYPESCRIPT="--typescript"
+  echo "=== BasicBen Test App Setup (TypeScript) ==="
+else
+  echo "=== BasicBen Test App Setup ==="
+fi
 echo ""
 
 # Step 1: Delete existing my-test-app
@@ -20,7 +31,7 @@ fi
 # Step 2: Create new test app with --local flag
 echo "Creating new test app..."
 cd "$ROOT_DIR"
-node create-basicben-app/index.js my-test-app --local
+node create-basicben-app/index.js my-test-app --local $USE_TYPESCRIPT
 
 # Step 3: Configure .env with port 3002 for frontend
 echo "Configuring .env..."

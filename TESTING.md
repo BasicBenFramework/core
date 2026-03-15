@@ -121,7 +121,11 @@ Create a local test app to test the full framework integration.
 ### Quick setup (recommended)
 
 ```bash
+# JavaScript template
 npm run test:app
+
+# TypeScript template
+npm run test:app:ts
 ```
 
 Then start the dev server:
@@ -134,8 +138,11 @@ npm run dev
 ### Manual setup
 
 ```bash
-# Create test app with local framework link
+# Create test app with local framework link (JavaScript)
 node create-basicben-app/index.js my-test-app --local
+
+# Create test app with local framework link (TypeScript)
+node create-basicben-app/index.js my-test-app --local --typescript
 
 cd my-test-app
 npm install
