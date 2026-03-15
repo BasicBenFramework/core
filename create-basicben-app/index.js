@@ -56,6 +56,9 @@ async function main() {
   // Check for --local flag
   const useLocal = args.includes('--local')
 
+  // Check for --typescript flag
+  const useTypeScript = args.includes('--typescript') || args.includes('--ts')
+
   const projectDir = resolve(process.cwd(), projectName)
 
   // Check if directory exists
@@ -72,8 +75,12 @@ async function main() {
   mkdirSync(projectDir, { recursive: true })
 
   // Copy template files
-  const templateDir = join(__dirname, 'template')
+  const templateDir = join(__dirname, useTypeScript ? 'template-ts' : 'template-js')
   copyDir(templateDir, projectDir)
+
+  if (useTypeScript) {
+    console.log(`${cyan('Using TypeScript template')}\n`)
+  }
 
   // Determine basicben dependency
   let basicbenDep = 'latest'
@@ -110,7 +117,12 @@ async function main() {
     devDependencies: {
       '@vitejs/plugin-react': '^5.1.4',
       vite: '^7.3.1',
-      vitest: '^4.0.0'
+      vitest: '^4.0.0',
+      ...(useTypeScript && {
+        'typescript': '^5.8',
+        '@types/react': '^19',
+        '@types/react-dom': '^19'
+      })
     }
   }
 
@@ -156,12 +168,14 @@ ${bold('Usage:')}
   npx @basicbenframework/create ${dim('<project-name>')} [options]
 
 ${bold('Options:')}
-  --local        Use local framework (for development)
-  -h, --help     Show this help message
+  --typescript, --ts   Use TypeScript template
+  --local              Use local framework (for development)
+  -h, --help           Show this help message
 
 ${bold('Examples:')}
   npx @basicbenframework/create my-app
-  npx @basicbenframework/create my-app --local   ${dim('# Use local framework')}
+  npx @basicbenframework/create my-app --typescript   ${dim('# Use TypeScript')}
+  npx @basicbenframework/create my-app --local        ${dim('# Use local framework')}
 `)
 }
 
