@@ -406,11 +406,11 @@ if [ -n "$AUTH_TOKEN" ]; then
       ((TESTS_FAILED++))
     fi
 
-    # Create comment
+    # Create comment (requires author_name and author_email)
     CREATE_COMMENT=$(curl -s -X POST "http://localhost:3001/api/posts/$POST_ID/comments" \
       -H "Authorization: Bearer $AUTH_TOKEN" \
       -H "Content-Type: application/json" \
-      -d '{"content":"This is a test comment on the post."}')
+      -d '{"content":"This is a test comment on the post.","author_name":"Test User","author_email":"test@example.com"}')
 
     if echo "$CREATE_COMMENT" | grep -q "test comment"; then
       log_success "POST /api/posts/:id/comments creates comment"
