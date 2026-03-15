@@ -9,6 +9,15 @@ export const VERSION = pkg.version
 // Database
 export { db, query, getDb, QueryBuilder, Grammar } from './db/index.js'
 
+// Hooks & Plugins
+export { hooks, HookManager, HOOKS } from './hooks/index.js'
+export { plugins, PluginManager } from './plugins/index.js'
+export { loadPlugins, scanPlugins } from './plugins/loader.js'
+
+// Themes
+export { themes, ThemeManager } from './themes/index.js'
+export { loadThemes, scanThemes, getThemeStylePath } from './themes/loader.js'
+
 // These will be implemented in later phases
 // export { validate, rules } from './validation/index.js'
 // export { signJwt, verifyJwt } from './auth/jwt.js'

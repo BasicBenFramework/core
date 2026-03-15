@@ -11,6 +11,15 @@ import { createServer, createRouter } from '@basicbenframework/core/server'
 import authRoutes from '../routes/api/auth'
 import postsRoutes from '../routes/api/posts'
 import profileRoutes from '../routes/api/profile'
+import categoriesRoutes from '../routes/api/categories'
+import tagsRoutes from '../routes/api/tags'
+import pagesRoutes from '../routes/api/pages'
+import commentsRoutes from '../routes/api/comments'
+import mediaRoutes from '../routes/api/media'
+import settingsRoutes from '../routes/api/settings'
+import feedRoutes from '../routes/api/feed'
+import themesRoutes from '../routes/api/themes'
+import pluginsRoutes from '../routes/api/plugins'
 
 // Determine static directory based on environment
 // In production, static files are in dist/client (relative to app root/cwd)
@@ -20,7 +29,10 @@ const app = await createServer({
   // Disable auto-loading since we're importing routes explicitly
   autoloadRoutes: false,
   // Serve static files from appropriate directory
-  static: { dir: staticDir }
+  static: { dir: staticDir },
+  // Enable plugins
+  plugins: true,
+  pluginsDir: 'plugins'
 })
 
 // Register routes
@@ -28,6 +40,15 @@ const router = createRouter()
 authRoutes(router)
 postsRoutes(router)
 profileRoutes(router)
+categoriesRoutes(router)
+tagsRoutes(router)
+pagesRoutes(router)
+commentsRoutes(router)
+mediaRoutes(router)
+settingsRoutes(router)
+feedRoutes(router)
+themesRoutes(router)
+pluginsRoutes(router)
 router.applyTo(app)
 
 const port = process.env.PORT || 3001

@@ -1,0 +1,164 @@
+import { getDb } from '@basicbenframework/core/db'
+import type { Page as PageType } from '../types'
+
+interface CreatePageData {
+  title: string
+  slug?: string
+  content?: string
+  template?: string
+  published?: boolean
+  parent_id?: number
+  menu_order?: number
+  meta_title?: string
+  meta_description?: string
+}
+
+interface UpdatePageData {
+  title?: string
+  slug?: string
+  content?: string
+  template?: string
+  published?: boolean
+  parent_id?: number
+  menu_order?: number
+  meta_title?: string
+  meta_description?: string
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
+export const Page = {
+  async all(): Promise<PageType[]> {
+    const db = await getDb()
+    return db.all('SELECT * FROM pages ORDER BY menu_order ASC, title ASC')
+  },
+
+  async find(id: number): Promise<PageType | undefined> {
+    const db = await getDb()
+    return db.get('SELECT * FROM pages WHERE id = ?', [id])
+  },
+
+  async findBySlug(slug: string): Promise<PageType | undefined> {
+    const db = await getDb()
+    return db.get('SELECT * FROM pages WHERE slug = ?', [slug])
+  },
+
+  async findPublished(): Promise<PageType[]> {
+    const db = await getDb()
+    return db.all(`
+      SELECT * FROM pages
+      WHERE published = 1
+      ORDER BY menu_order ASC, title ASC
+    `)
+  },
+
+  async findPublishedBySlug(slug: string): Promise<PageType | undefined> {
+    const db = await getDb()
+    return db.get('SELECT * FROM pages WHERE slug = ? AND published = 1', [slug])
+  },
+
+  async tree(): Promise<PageType[]> {
+    const pages = await this.all()
+    return buildTree(pages)
+  },
+
+  async create(data: CreatePageData): Promise<PageType> {
+    const db = await getDb()
+    const slug = data.slug || slugify(data.title)
+    const now = new Date().toISOString()
+
+    const result = await db.run(
+      `INSERT INTO pages (title, slug, content, template, published, parent_id, menu_order, meta_title, meta_description, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        data.title,
+        slug,
+        data.content || null,
+        data.template || 'default',
+        data.published ? 1 : 0,
+        data.parent_id || null,
+        data.menu_order || 0,
+        data.meta_title || null,
+        data.meta_description || null,
+        now,
+        now
+      ]
+    )
+
+    return {
+      id: result.lastInsertRowid as number,
+      title: data.title,
+      slug,
+      content: data.content,
+      template: data.template || 'default',
+      published: data.published || false,
+      parent_id: data.parent_id,
+      menu_order: data.menu_order || 0,
+      meta_title: data.meta_title,
+      meta_description: data.meta_description,
+      created_at: now,
+      updated_at: now
+    }
+  },
+
+  async update(id: number, data: UpdatePageData): Promise<PageType> {
+    const db = await getDb()
+
+    if (data.title && !data.slug) {
+      data.slug = slugify(data.title)
+    }
+
+    const updateData: Record<string, unknown> = { ...data, updated_at: new Date().toISOString() }
+
+    if ('published' in data) {
+      updateData.published = data.published ? 1 : 0
+    }
+
+    const fields = Object.keys(updateData).map(k => `${k} = ?`).join(', ')
+    await db.run(
+      `UPDATE pages SET ${fields} WHERE id = ?`,
+      [...Object.values(updateData), id]
+    )
+
+    return this.find(id) as Promise<PageType>
+  },
+
+  async delete(id: number): Promise<void> {
+    const db = await getDb()
+    // Update children to remove parent
+    await db.run('UPDATE pages SET parent_id = NULL WHERE parent_id = ?', [id])
+    // Delete page
+    await db.run('DELETE FROM pages WHERE id = ?', [id])
+  },
+
+  async slugExists(slug: string, excludeId?: number): Promise<boolean> {
+    const db = await getDb()
+    const query = excludeId
+      ? 'SELECT id FROM pages WHERE slug = ? AND id != ?'
+      : 'SELECT id FROM pages WHERE slug = ?'
+    const params = excludeId ? [slug, excludeId] : [slug]
+    const result = await db.get(query, params)
+    return !!result
+  },
+
+  async reorder(pages: { id: number; menu_order: number }[]): Promise<void> {
+    const db = await getDb()
+    for (const { id, menu_order } of pages) {
+      await db.run('UPDATE pages SET menu_order = ? WHERE id = ?', [menu_order, id])
+    }
+  }
+}
+
+function buildTree(pages: PageType[], parentId: number | null = null): PageType[] {
+  return pages
+    .filter(page => page.parent_id === parentId)
+    .map(page => ({
+      ...page,
+      children: buildTree(pages, page.id)
+    }))
+}
