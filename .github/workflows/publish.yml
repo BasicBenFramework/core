@@ -28,8 +28,14 @@ jobs:
       - name: Install dev dependencies
         run: npm ci
 
-      - name: Scaffold, build and boot a real app
-        run: ./scripts/smoke-test.sh
+      # The end-to-end smoke test moved to the basicben monorepo with the CMS
+      # it drives, so releases here are gated on the unit suite. That is a
+      # genuine reduction: unit tests pass on a package published without its
+      # templates and on a server entry that cannot start, both of which have
+      # shipped before. basicben runs the smoke test against the published
+      # version after release.
+      - name: Unit tests
+        run: npm test
 
   publish:
     needs: verify
@@ -49,6 +55,5 @@ jobs:
       - name: Publish @basicbenframework/core
         run: npm publish --access public --provenance
 
-      - name: Publish @basicbenframework/create
-        working-directory: ./create-basicben-app
-        run: npm publish --access public --provenance
+      # @basicbenframework/create is published from the basicben monorepo now:
+      # it bundles the CMS, and the CMS lives there.

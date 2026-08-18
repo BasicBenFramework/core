@@ -91,18 +91,10 @@ pkg.version = '$NEW_VERSION';
 fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
 
-# Update version in create-basicben-app/package.json
-echo -e "${GREEN}Updating version in create-basicben-app/package.json...${NC}"
-node -e "
-const fs = require('fs');
-const pkg = JSON.parse(fs.readFileSync('./create-basicben-app/package.json', 'utf8'));
-pkg.version = '$NEW_VERSION';
-fs.writeFileSync('./create-basicben-app/package.json', JSON.stringify(pkg, null, 2) + '\n');
-"
 
 # Commit
 echo -e "${GREEN}Committing changes...${NC}"
-git add package.json create-basicben-app/package.json
+git add package.json
 git commit -m "v$NEW_VERSION"
 
 # Tag

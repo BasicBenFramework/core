@@ -1,6 +1,6 @@
 {
   "name": "@basicbenframework/core",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A full-stack framework for React. Minimal dependencies, maximum clarity.",
   "author": "ctmakes",
   "repository": {
@@ -121,7 +121,6 @@
     "minimal"
   ],
   "license": "MIT",
-  "dependencies": {},
   "peerDependencies": {
     "@vitejs/plugin-react": ">=5",
     "react": ">=18",
