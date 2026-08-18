@@ -6,9 +6,13 @@ on:
       - 'v*'
 
 jobs:
-  # Unit tests pass on a package published without its templates and on a server
-  # entry that cannot start. Both have shipped. The smoke test builds and boots a
-  # real scaffolded app, and publishing is gated on it.
+  # The end-to-end smoke test moved to BasicBenFramework/basicben with the CMS
+  # it drives, so a release here is gated on the unit suite and the declaration
+  # checks rather than on booting a real app. That is a genuine reduction: unit
+  # tests pass on a package published without its templates and on a server
+  # entry that cannot start, and both have shipped before. basicben runs the
+  # smoke test against the published version, which catches the same class of
+  # problem after release instead of before it.
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -19,23 +23,17 @@ jobs:
         with:
           node-version: '25'
 
-      - name: Run tests
-        run: npm test
-
-      # The smoke test regenerates the committed declarations to check they
-      # still match the JSDoc, which needs the framework's own tsc and React
-      # types. Publishing stale types is silent otherwise.
+      # tsc and the React types, for the declaration checks below.
       - name: Install dev dependencies
         run: npm ci
 
-      # The end-to-end smoke test moved to the basicben monorepo with the CMS
-      # it drives, so releases here are gated on the unit suite. That is a
-      # genuine reduction: unit tests pass on a package published without its
-      # templates and on a server entry that cannot start, both of which have
-      # shipped before. basicben runs the smoke test against the published
-      # version after release.
       - name: Unit tests
         run: npm test
+
+      # Publishing stale or malformed declarations is otherwise silent: apps
+      # compile with skipLibCheck, so a broken .d.ts still lets them build.
+      - name: Declarations are current and self-consistent
+        run: npm run check:types
 
   publish:
     needs: verify
@@ -55,5 +53,5 @@ jobs:
       - name: Publish @basicbenframework/core
         run: npm publish --access public --provenance
 
-      # @basicbenframework/create is published from the basicben monorepo now:
-      # it bundles the CMS, and the CMS lives there.
+      # @basicbenframework/create is published from the basicben monorepo: it
+      # bundles the CMS at pack time, and the CMS lives there.

@@ -17,10 +17,12 @@ jobs:
         with:
           node-version: '25'
 
+      # No install: the framework has zero runtime dependencies, so its own
+      # suite runs against a bare checkout.
       - name: Run tests
         run: npm test
 
-  smoke:
+  types:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -30,11 +32,17 @@ jobs:
         with:
           node-version: '25'
 
-      # Only the smoke test needs these: it regenerates the committed
-      # declarations to check they still match the JSDoc, which needs the
-      # framework's own tsc and React types.
+      # This one needs tsc and the React types, so it installs.
       - name: Install dev dependencies
         run: npm ci
 
-      - name: Scaffold, build and boot a real app
-        run: ./scripts/smoke-test.sh
+      # The committed declarations are generated from JSDoc. An edit that skips
+      # `npm run build:types` ships types describing the previous version, and a
+      # malformed .d.ts still lets every app compile because apps use
+      # skipLibCheck. Both have happened.
+      - name: Declarations are current and self-consistent
+        run: npm run check:types
+
+  # The end-to-end smoke test lives in BasicBenFramework/basicben with the CMS
+  # it drives. It runs against the published framework, so it covers a release
+  # after the fact rather than gating it — the trade made when the CMS moved out.

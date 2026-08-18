@@ -111,7 +111,8 @@
     "test:scaffolding": "node --test \"src/scaffolding/**/*.test.js\"",
     "test:app": "./scripts/test-app.sh",
     "build:types": "tsc -p tsconfig.types.json",
-    "release": "./scripts/publish.sh"
+    "release": "./scripts/publish.sh",
+    "check:types": "./scripts/check-types.sh"
   },
   "keywords": [
     "react",
