@@ -112,7 +112,8 @@
     "test:app": "./scripts/test-app.sh",
     "build:types": "tsc -p tsconfig.types.json",
     "release": "./scripts/publish.sh",
-    "check:types": "./scripts/check-types.sh"
+    "check:types": "./scripts/check-types.sh",
+    "check:scaffolder": "./scripts/check-scaffolder.sh"
   },
   "keywords": [
     "react",

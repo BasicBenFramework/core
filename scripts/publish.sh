@@ -82,19 +82,22 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
   fi
 fi
 
-# Update version in root package.json
-echo -e "${GREEN}Updating version in package.json...${NC}"
-node -e "
+# Both published packages carry the same number.
+for TARGET in . create; do
+  echo -e "${GREEN}Updating version in $TARGET/package.json...${NC}"
+  node -e "
 const fs = require('fs');
-const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+const path = './$TARGET/package.json';
+const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
 pkg.version = '$NEW_VERSION';
-fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
 "
+done
 
 
 # Commit
 echo -e "${GREEN}Committing changes...${NC}"
-git add package.json
+git add package.json create/package.json
 git commit -m "v$NEW_VERSION"
 
 # Tag

@@ -43,6 +43,11 @@ jobs:
       - name: Declarations are current and self-consistent
         run: npm run check:types
 
+      # The scaffolder is published from here too. It downloads the CMS, so this
+      # needs network access and runs against that repository's default branch.
+      - name: The scaffolder produces a usable project
+        run: npm run check:scaffolder
+
   # The end-to-end smoke test lives in BasicBenFramework/basicben with the CMS
   # it drives. It runs against the published framework, so it covers a release
   # after the fact rather than gating it — the trade made when the CMS moved out.

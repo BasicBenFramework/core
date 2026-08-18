@@ -1,5 +1,14 @@
 # Publishing to npm
 
+Two packages are released from this repository:
+
+| Package | Source | Notes |
+|---|---|---|
+| `@basicbenframework/core` | repository root | The framework. |
+| `@basicbenframework/create` | `create/` | The scaffolder. One file, no dependencies: it downloads the CMS from BasicBenFramework/basicben at run time rather than bundling a copy, so there is no build step and nothing to keep in step. |
+
+The CMS itself is not published — people clone it, or run the scaffolder.
+
 ## Quick Release
 
 Once Trusted Publishing is configured, use the release script:
@@ -28,12 +37,8 @@ Packages must exist before configuring Trusted Publishing.
 # Login to npm
 npm login
 
-# Publish main package
 npm publish --access public
-
-# Publish @basicbenframework/create
-cd create-basicben-app
-npm publish --access public
+cd create && npm publish --access public
 ```
 
 ## Setup Trusted Publishing
@@ -53,9 +58,9 @@ If you prefer not to use the script:
 
 1. **Update version numbers**
    ```bash
-   # Edit package.json version in both:
-   # - /package.json
-   # - /create-basicben-app/package.json
+   # Edit the version in both:
+   # - /package.json          (@basicbenframework/core)
+   # - /create/package.json   (@basicbenframework/create)
    ```
 
 2. **Commit and tag**

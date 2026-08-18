@@ -35,6 +35,11 @@ jobs:
       - name: Declarations are current and self-consistent
         run: npm run check:types
 
+      # The scaffolder is published from here too. It downloads the CMS, so this
+      # needs network access and runs against that repository's default branch.
+      - name: The scaffolder produces a usable project
+        run: npm run check:scaffolder
+
   publish:
     needs: verify
     runs-on: ubuntu-latest
@@ -53,5 +58,10 @@ jobs:
       - name: Publish @basicbenframework/core
         run: npm publish --access public --provenance
 
-      # @basicbenframework/create is published from the basicben monorepo: it
-      # bundles the CMS at pack time, and the CMS lives there.
+      # The scaffolder lives here again. It used to bundle a copy of the CMS at
+      # pack time, which is why it had to sit in the CMS repository; it
+      # downloads at run time now, so it is a standalone one-file CLI with no
+      # dependencies and no build step, and publishes from wherever it lives.
+      - name: Publish @basicbenframework/create
+        working-directory: ./create
+        run: npm publish --access public --provenance
