@@ -1,6 +1,6 @@
 {
   "name": "@basicbenframework/create",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Create a new project from the BasicBen CMS",
   "type": "module",
   "bin": {
