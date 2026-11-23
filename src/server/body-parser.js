@@ -120,21 +120,39 @@ function readBody(req, maxBytes) {
   })
 }
 
+/** Keys that reach Object.prototype, or a constructor, when assigned. */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
 /**
  * Parse URL-encoded body
+ *
+ * The result has a null prototype and the keys above are dropped. With an
+ * ordinary object, `__proto__[]=x` read `result.__proto__` — Object.prototype,
+ * which is truthy — and called `.push` on it: a 500 from one form field, and a
+ * shape of input that is one step from prototype pollution. A null-prototype
+ * object has no inherited keys for a field name to collide with.
+ *
+ * @param {string} str
+ * @returns {Record<string, string|string[]>}
  */
-function parseUrlEncoded(str) {
-  if (!str) return {}
+export function parseUrlEncoded(str) {
+  const result = Object.create(null)
+  if (!str) return result
 
   const params = new URLSearchParams(str)
-  const result = {}
 
   for (const [key, value] of params) {
     // Handle array notation: items[]=a&items[]=b
-    if (key.endsWith('[]')) {
-      const arrayKey = key.slice(0, -2)
-      if (!result[arrayKey]) result[arrayKey] = []
-      result[arrayKey].push(value)
+    const isArray = key.endsWith('[]')
+    const name = isArray ? key.slice(0, -2) : key
+
+    if (UNSAFE_KEYS.has(name)) continue
+
+    if (isArray) {
+      const existing = result[name]
+      // `a=1&a[]=2` keeps both values rather than calling push on a string.
+      if (Array.isArray(existing)) existing.push(value)
+      else result[name] = existing === undefined ? [value] : [existing, value]
     } else {
       result[key] = value
     }

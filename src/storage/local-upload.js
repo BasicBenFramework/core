@@ -52,7 +52,9 @@ export function localUploadReceiver(options = {}) {
     const verified = adapter.verifySignedUrl(key, {
       method: 'PUT',
       expires: url.searchParams.get('expires'),
-      signature: url.searchParams.get('signature')
+      signature: url.searchParams.get('signature'),
+      // Checked against the signature when the URL was issued for a type.
+      contentType: req.headers['content-type']
     })
 
     if (!verified.valid) {

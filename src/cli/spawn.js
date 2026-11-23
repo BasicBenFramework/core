@@ -52,19 +52,3 @@ export function spawnBin(cwd, pkgName, args, options = {}) {
 
   return spawn(process.execPath, [bin, ...args], { cwd, ...options })
 }
-
-/**
- * Spawn npm
- *
- * npm itself lives outside node_modules, so it needs a shell on Windows.
- * The command is built as one string because passing an args array alongside
- * `shell: true` is deprecated (DEP0190) — safe here since every argument is a
- * fixed literal, never user input.
- *
- * @param {string[]} args - npm arguments, e.g. ['install']
- * @param {Object} options - node:child_process spawn options
- * @returns {import('node:child_process').ChildProcess}
- */
-export function spawnNpm(args, options = {}) {
-  return spawn(['npm', ...args].join(' '), { ...options, shell: true })
-}

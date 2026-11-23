@@ -12,10 +12,17 @@
  * override: that is what dotenv does, what Node's own `--env-file` does, and
  * what every host that injects configuration assumes. Overwriting meant
  * `DATABASE_URL=... basicben migrate` silently used the file's value instead.
+ *
+ * Parsed with Node's own `util.parseEnv` — the parser behind the
+ * `--env-file` flag that `dev` and `start` use — so every command reads a value
+ * the same way. The hand-rolled parser this replaces kept the quotes around
+ * `APP_KEY="abc"`, so `migrate` and the server it started disagreed about the
+ * key itself.
  */
 
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { parseEnv } from 'node:util'
 
 /**
  * @param {string} [cwd] - directory to look for .env in
@@ -26,25 +33,9 @@ export function loadEnv(cwd = process.cwd()) {
 
   if (!existsSync(envPath)) return false
 
-  for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
-    const trimmed = line.trim()
+  const parsed = parseEnv(readFileSync(envPath, 'utf-8'))
 
-    if (!trimmed || trimmed.startsWith('#')) continue
-
-    const [key, ...rest] = trimmed.split('=')
-
-    if (!key || rest.length === 0) continue
-
-    let value = rest.join('=').trim()
-
-    // Strip an inline comment, but not one inside a quoted value.
-    if (!value.startsWith('"') && !value.startsWith("'")) {
-      const comment = value.indexOf('#')
-      if (comment !== -1) value = value.substring(0, comment).trim()
-    }
-
-    const name = key.trim()
-
+  for (const [name, value] of Object.entries(parsed)) {
     if (process.env[name] === undefined) {
       process.env[name] = value
     }

@@ -1,4 +1,8 @@
 /**
+ * @typedef {{ lastInsertRowid: number|bigint, changes: number|bigint }} RunResult
+ * @typedef {Record<string, import('node:sqlite').SQLOutputValue>} Row
+ */
+/**
  * Create SQLite adapter
  *
  * @param {string} url - Path to SQLite database file
@@ -10,41 +14,47 @@ export function createSqliteAdapter(url: string, options?: any): Promise<{
      */
     driver: string;
     /**
-     * Run INSERT/UPDATE/DELETE
+     * Run INSERT/UPDATE/DELETE. Synchronous, except while a transaction this
+     * caller is not part of is open — then a promise, settled after it ends.
+     *
+     * @type {(sql: string, params?: any) => RunResult | Promise<RunResult>}
      */
-    run(sql: any, params?: any[]): {
-        lastInsertRowid: number | bigint;
-        changes: number | bigint;
-    };
+    run: (sql: string, params?: any) => RunResult | Promise<RunResult>;
     /**
-     * Get single row
+     * Get single row (synchronous or queued, as `run`)
+     *
+     * @type {(sql: string, params?: any) => Row | undefined | Promise<Row | undefined>}
      */
-    get(sql: any, params?: any[]): Record<string, import("node:sqlite").SQLOutputValue>;
+    get: (sql: string, params?: any) => Row | undefined | Promise<Row | undefined>;
     /**
-     * Get all rows
+     * Get all rows (synchronous or queued, as `run`)
+     *
+     * @type {(sql: string, params?: any) => Row[] | Promise<Row[]>}
      */
-    all(sql: any, params?: any[]): Record<string, import("node:sqlite").SQLOutputValue>[];
+    all: (sql: string, params?: any) => Row[] | Promise<Row[]>;
     /**
-     * Execute raw SQL (multiple statements)
+     * Execute raw SQL (multiple statements; synchronous or queued, as `run`)
+     *
+     * @type {(sql: string) => void | Promise<void>}
      */
-    exec(sql: any): void;
+    exec: (sql: string) => void | Promise<void>;
     /**
      * Run function in transaction.
      *
-     * The callback receives the adapter so the same code works against Postgres,
-     * which passes a transaction-scoped adapter. The result is awaited: an async
+     * The callback receives a transaction handle with the same methods, so the
+     * same code works against Postgres. The result is awaited: an async
      * callback would otherwise commit before its work finished, and a rejection
      * would escape the rollback.
      *
-     * A nested call joins the transaction already open instead of starting
-     * another, which SQLite refuses outright ("cannot start a transaction
-     * within a transaction"). Only the outermost call commits or rolls back, so
-     * an inner failure still unwinds the whole thing — there are no savepoints
-     * here and a partial rollback would be worse than none. The depth counter
-     * is safe because this connection is synchronous: nothing else can be
-     * mid-transaction on it.
+     * Concurrent calls run one after another, never inside each other; a call
+     * made from inside an open transaction is a SAVEPOINT within it. See the
+     * comment above `context` for how "inside" is decided.
+     *
+     * @template T
+     * @param {(tx: Object) => T | Promise<T>} fn
+     * @returns {Promise<T>}
      */
-    transaction(fn: any): Promise<any>;
+    transaction<T>(fn: (tx: any) => T | Promise<T>): Promise<T>;
     /**
      * Close database connection
      */
@@ -54,4 +64,9 @@ export function createSqliteAdapter(url: string, options?: any): Promise<{
      */
     readonly raw: DatabaseSync;
 }>;
+export type RunResult = {
+    lastInsertRowid: number | bigint;
+    changes: number | bigint;
+};
+export type Row = Record<string, import("node:sqlite").SQLOutputValue>;
 import { DatabaseSync } from 'node:sqlite';

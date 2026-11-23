@@ -98,6 +98,33 @@ export function createApp(options = {}) {
   }
 
   /**
+   * Hand an error to onError, and survive onError failing.
+   *
+   * An error handler that throws — or one that writes headers on a response
+   * that has already been sent — used to surface as an unhandled rejection,
+   * which takes the whole process down under Node's default policy. One bad
+   * request should never cost every other in-flight request its connection.
+   */
+  async function handleError(err, req, res) {
+    try {
+      await onError(err, req, res)
+    } catch (handlerError) {
+      console.error('Error handler failed:', handlerError)
+      try {
+        if (!res.headersSent) {
+          res.statusCode = 500
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: 'Internal Server Error' }))
+        } else if (!res.writableEnded) {
+          res.destroy()
+        }
+      } catch {
+        // Nothing more can be done for this response.
+      }
+    }
+  }
+
+  /**
    * Run middleware chain
    */
   async function runMiddleware(handlers, req, res) {
@@ -105,7 +132,7 @@ export function createApp(options = {}) {
 
     const next = async (err) => {
       if (err) {
-        return onError(err, req, res)
+        return handleError(err, req, res)
       }
 
       if (index >= handlers.length) {
@@ -117,7 +144,7 @@ export function createApp(options = {}) {
       try {
         await handler(req, res, next)
       } catch (error) {
-        onError(error, req, res)
+        await handleError(error, req, res)
       }
     }
 
@@ -153,7 +180,7 @@ export function createApp(options = {}) {
    * Create the HTTP server
    */
   const server = createHttpServer((req, res) => {
-    handleRequest(req, res).catch(err => onError(err, req, res))
+    handleRequest(req, res).catch(err => handleError(err, req, res))
   })
 
   /**
@@ -162,6 +189,7 @@ export function createApp(options = {}) {
   const app = {
     use,
     server,
+
 
     // HTTP method shortcuts
     get: (path, ...handlers) => addRoute('GET', path, ...handlers),
@@ -197,7 +225,12 @@ export function createApp(options = {}) {
 function defaultErrorHandler(err, req, res) {
   console.error('Server error:', err)
 
-  if (res.headersSent) return
+  if (res.headersSent) {
+    // A partial response cannot be turned into an error response; cut it off
+    // so the client sees a failure rather than a silently truncated body.
+    if (!res.writableEnded) res.destroy()
+    return
+  }
 
   const statusCode = err.statusCode || err.status || 500
   const message = process.env.NODE_ENV === 'production'

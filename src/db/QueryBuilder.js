@@ -432,7 +432,11 @@ export class QueryBuilder {
     sql += whereClause
 
     const result = await this.db.get(sql, this.getParams())
-    return result?.count || 0
+
+    // Postgres returns COUNT(*) as bigint, which node-postgres hands back as a
+    // string — "3" > 10 compares as text and "3" + 1 is "31". Coerced here so
+    // every driver answers with a number.
+    return Number(result?.count ?? 0) || 0
   }
 
   /**
@@ -448,13 +452,29 @@ export class QueryBuilder {
   /**
    * Paginate results.
    *
-   * @param {number} page - Page number (1-indexed)
-   * @param {number} perPage - Items per page
+   * Both arguments usually come straight from a query string, so they are
+   * coerced rather than trusted: anything that is not a positive integer
+   * becomes the default, and `perPage` is capped. `parseInt('abc')` used to
+   * reach the SQL as `LIMIT NaN` — a 500 — and `?perPage=1000000` read the
+   * whole table in one request.
+   *
+   * @param {number|string} [page] - Page number (1-indexed); default 1
+   * @param {number|string} [perPage] - Items per page; default 15, at most `maxPerPage`
+   * @param {Object} [options]
+   * @param {number} [options.maxPerPage] - default 100
    * @returns {Promise<{ data: Array, total: number, page: number, perPage: number, totalPages: number }>}
    */
-  async paginate(page = 1, perPage = 15) {
-    const pageNum = Math.max(1, parseInt(page, 10))
-    const perPageNum = Math.max(1, parseInt(perPage, 10))
+  async paginate(page = 1, perPage = 15, options = {}) {
+    const maxPerPage = Math.max(1, Math.floor(Number(options.maxPerPage) || 100))
+    const toPositive = (value, fallback) => {
+      const n = Math.floor(Number(value))
+      return Number.isFinite(n) && n >= 1 ? n : fallback
+    }
+
+    // Capped too: a page number in the billions is an OFFSET past
+    // Number.MAX_SAFE_INTEGER once multiplied, and no table has that page.
+    const pageNum = Math.min(toPositive(page, 1), 1_000_000_000)
+    const perPageNum = Math.min(toPositive(perPage, 15), maxPerPage)
 
     // Get total count (clone query state)
     const total = await this.count()

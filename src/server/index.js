@@ -12,6 +12,8 @@ import { cors } from './cors.js'
 import { serveStatic, spaFallback } from './static.js'
 import { loadRoutes, loadMiddleware, loadConfig } from './loader.js'
 import { hooks, HOOKS } from '../hooks/index.js'
+import { securityHeaders } from './security-headers.js'
+import { assertAppKey } from './app-key.js'
 
 /**
  * Create a BasicBen server instance
@@ -19,6 +21,10 @@ import { hooks, HOOKS } from '../hooks/index.js'
 export async function createServer(options = {}) {
   const config = await loadConfig()
   const mergedConfig = { ...defaultConfig, ...config, ...options }
+
+  // Fail at boot, not on the first signed upload: production without a real
+  // APP_KEY would otherwise run until something needs to sign.
+  assertAppKey()
 
   // Fire server.starting hook
   await hooks.fire(HOOKS.SERVER_STARTING, { config: mergedConfig })
@@ -40,6 +46,12 @@ export async function createServer(options = {}) {
 
   // Core middleware
   app.use(addResponseHelpers)
+
+  // First, so every response — 404s and errors included — carries them, and
+  // before any handler, so one that sets its own header replaces the default.
+  if (mergedConfig.securityHeaders !== false) {
+    app.use(securityHeaders(mergedConfig.securityHeaders === true ? {} : (mergedConfig.securityHeaders || {})))
+  }
 
   // Request hooks middleware
   app.use(requestHooksMiddleware)
@@ -71,9 +83,13 @@ export async function createServer(options = {}) {
     // of the app's own static middleware so the upload directory answers for
     // its own prefix rather than depending on where the app happens to serve
     // from.
+    //
+    // Marked untrusted: users write to this directory, so nothing in it may
+    // render as a document or run as script on the app's origin.
     app.use(serveStatic({
       dir: storageConfig.dir || 'public/uploads',
-      prefix: storageConfig.baseUrl || '/uploads'
+      prefix: storageConfig.baseUrl || '/uploads',
+      untrusted: true
     }))
   }
 
@@ -169,6 +185,16 @@ export async function createServer(options = {}) {
 }
 
 /**
+ * Responses whose end() has been called but not yet flushed.
+ *
+ * The request.after hook runs between a handler calling res.end() and the
+ * bytes going out, so for that window neither headersSent nor writableEnded is
+ * true — and an error thrown in it looked like a response nobody had answered.
+ * The error handler then wrote a second response into the same socket.
+ */
+const endingResponses = new WeakSet()
+
+/**
  * Request hooks middleware - fires request.before and request.after hooks
  */
 async function requestHooksMiddleware(req, res, next) {
@@ -189,6 +215,11 @@ async function requestHooksMiddleware(req, res, next) {
 
   // Override res.end to capture response and fire request.after
   res.end = async function(data, encoding) {
+    // The first end() wins. A second one — typically an error handler running
+    // after a handler already answered — would be a write after end.
+    if (endingResponses.has(res)) return res
+    endingResponses.add(res)
+
     responseData = data
 
     // Fire request.after hook
@@ -232,6 +263,17 @@ function defaultErrorHandler(err, req, res) {
 
   // Fire request.error hook
   hooks.fire(HOOKS.REQUEST_ERROR, { err, req, res }).catch(console.error)
+
+  // An error after the response has started — a handler that threw after
+  // res.json(), a stream that failed mid-body — used to call setHeader on a
+  // sent response, which throws ERR_HTTP_HEADERS_SENT from inside the error
+  // handler and crashed the process.
+  if (endingResponses.has(res)) return
+
+  if (res.headersSent || res.writableEnded) {
+    if (!res.writableEnded) res.destroy()
+    return
+  }
 
   const statusCode = err.statusCode || err.status || 500
   const message = process.env.NODE_ENV === 'production'
@@ -280,12 +322,20 @@ export function addResponseHelpers(req, res, next) {
 
   /**
    * Send text response
+   *
+   * Without a Content-Type a browser sniffs the body, and a string that looks
+   * like markup gets rendered as HTML — so a handler echoing anything
+   * user-supplied through res.send() was an XSS. Plain text is the default;
+   * set a Content-Type first to send HTML on purpose.
    */
   res.send = (data) => {
-    if (typeof data === 'object') {
+    if (typeof data === 'object' && !Buffer.isBuffer(data)) {
       return res.json(data)
     }
-    res.end(String(data))
+    if (!res.getHeader('Content-Type')) {
+      res.setHeader('Content-Type', Buffer.isBuffer(data) ? 'application/octet-stream' : 'text/plain; charset=utf-8')
+    }
+    res.end(Buffer.isBuffer(data) ? data : String(data))
   }
 
   /**
@@ -306,6 +356,8 @@ export { Router, createRouter } from './router.js'
 export { bodyParser, json } from './body-parser.js'
 export { cors } from './cors.js'
 export { serveStatic } from './static.js'
+export { securityHeaders, DEFAULT_SECURITY_HEADERS } from './security-headers.js'
+export { appKey, assertAppKey } from './app-key.js'
 export { loadRoutes, loadMiddleware, loadConfig } from './loader.js'
 export { hooks, HOOKS } from '../hooks/index.js'
 export {

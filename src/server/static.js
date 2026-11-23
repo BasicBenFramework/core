@@ -36,6 +36,19 @@ const mimeTypes = {
   '.zip': 'application/zip'
 }
 
+/**
+ * Extensions that are never rendered inline from an untrusted mount.
+ *
+ * Each is a type a browser treats as an active document or script. Served
+ * inline from the app's origin, any one of them is same-origin script
+ * execution — so from a directory users write to they go out as downloads.
+ */
+const ACTIVE_EXTENSIONS = new Set([
+  '.html', '.htm', '.xhtml', '.xht', '.shtml', '.mht', '.mhtml',
+  '.svg', '.svgz', '.xml', '.xsl', '.xslt',
+  '.js', '.mjs', '.cjs', '.wasm'
+])
+
 const defaults = {
   dir: 'public',
   prefix: '/',
@@ -43,9 +56,33 @@ const defaults = {
   index: 'index.html',
   dotfiles: 'ignore', // 'ignore', 'allow', 'deny'
   spa: false, // serve index.html for unmatched client routes
-  spaExclude: [/^\/api\//]
+  spaExclude: [/^\/api\//],
+  untrusted: false // the directory holds user uploads; see serveStatic
 }
 
+/**
+ * Serve files from a directory.
+ *
+ * `untrusted: true` is for directories users write to, such as the local
+ * storage driver's uploads. Every response then carries
+ * `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and
+ * anything a browser would run or render as a document (HTML, SVG, XML,
+ * JavaScript) is sent as `application/octet-stream` with
+ * `Content-Disposition: attachment` instead of inline. The upload path already
+ * stores files under an extension derived from their validated type; this is
+ * the second wall, for files that got there some other way.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.dir]
+ * @param {string} [options.prefix]
+ * @param {number} [options.maxAge] - seconds
+ * @param {string} [options.index]
+ * @param {'ignore'|'allow'|'deny'} [options.dotfiles]
+ * @param {boolean} [options.spa]
+ * @param {RegExp[]} [options.spaExclude]
+ * @param {boolean} [options.untrusted]
+ * @returns {Function} middleware
+ */
 export function serveStatic(options = {}) {
   const config = { ...defaults, ...options }
   const root = resolve(process.cwd(), config.dir)
@@ -115,7 +152,23 @@ export function serveStatic(options = {}) {
 
     // Get mime type
     const ext = extname(fullPath).toLowerCase()
-    const mime = mimeTypes[ext] || 'application/octet-stream'
+    let mime = mimeTypes[ext] || 'application/octet-stream'
+
+    if (config.untrusted) {
+      // Without nosniff a browser may decide a "text/plain" upload is HTML
+      // after all; the sandbox stops anything that does render from running
+      // script with the app's origin.
+      res.setHeader('X-Content-Type-Options', 'nosniff')
+      // Appended rather than replaced, so a framing policy set by the
+      // security-headers middleware survives.
+      const existing = res.getHeader('Content-Security-Policy')
+      res.setHeader('Content-Security-Policy', existing ? `${existing}; sandbox` : 'sandbox')
+
+      if (ACTIVE_EXTENSIONS.has(ext)) {
+        mime = 'application/octet-stream'
+        res.setHeader('Content-Disposition', 'attachment')
+      }
+    }
 
     // Set headers
     res.setHeader('Content-Type', mime)

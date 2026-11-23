@@ -37,10 +37,25 @@ export function extractAddresses(value: string | string[]): string[];
 /**
  * Pull the address out of a possibly-decorated string.
  *
+ * The result goes into `MAIL FROM:<…>` and `RCPT TO:<…>` verbatim, so it is
+ * refused outright if it contains a line break, an angle bracket, whitespace or
+ * any other control character. Headers have encodeHeader to neutralise CRLF;
+ * the envelope has nothing, and `a@b.com>\r\nRCPT TO:<victim@x.com` taken
+ * from a form field would otherwise add a recipient of the sender's choosing —
+ * or end the command stream and start a message of their own.
+ *
  * @param {string} value
  * @returns {string}
+ * @throws {Error} when the address contains characters no address can
  */
 export function extractAddress(value: string): string;
+/**
+ * Throw unless an address is safe to place in an SMTP envelope command.
+ *
+ * @param {string} address
+ * @throws {Error}
+ */
+export function assertEnvelopeAddress(address: string): void;
 /**
  * Encode a header value.
  *

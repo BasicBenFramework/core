@@ -22,6 +22,7 @@
  * control rather than a courtesy.
  */
 
+import { isIP } from 'node:net'
 import { MemoryStore } from './rate-limit-stores.js'
 
 export { MemoryStore, DatabaseStore } from './rate-limit-stores.js'
@@ -159,7 +160,7 @@ function describe(state, limit, now) {
  *
  * @param {(LimiterOptions | { limiter: Limiter }) & {
  *   key?: (req: any) => string|null|undefined,
- *   trustProxy?: boolean,
+ *   trustProxy?: boolean|number,
  *   onLimited?: (req: any, res: any, info: RateLimitResult) => void,
  *   headers?: boolean,
  *   message?: string
@@ -218,22 +219,98 @@ export function rateLimit(options = {}) {
  * directly-exposed server lets anyone rotate their apparent address and bypass
  * every limit here. Behind a proxy that overwrites the header, set it.
  *
+ * Even then only the entries the proxies appended can be believed. Each proxy
+ * appends the address it received the request from, so the client's address
+ * is the one *your* proxies added — counted from the right. The left-most
+ * entry is whatever the client sent, which is why reading it (as this once
+ * did) made trustProxy a bypass rather than a fix.
+ *
+ * - `trustProxy: true` — one proxy in front (the common case): the right-most entry.
+ * - `trustProxy: n` — n proxies in front: the n-th entry from the right. A
+ *   shorter header yields its left-most entry, as Express does.
+ *
+ * The result is normalised so one client cannot hold many keys: an
+ * IPv4-mapped IPv6 address (`::ffff:1.2.3.4`) is reported as the IPv4 address,
+ * and an IPv6 address as its /64 — a single subscriber is routinely handed a
+ * whole /64, and keying on the full address gave them 2⁶⁴ budgets.
+ *
  * @param {Object} req
- * @param {boolean} [trustProxy]
+ * @param {boolean|number} [trustProxy] - `true` = one hop; a number = that many hops
  * @returns {string}
  */
 export function clientAddress(req, trustProxy = false) {
-  if (trustProxy) {
+  const hops = trustProxy === true ? 1 : Math.max(0, Math.floor(Number(trustProxy) || 0))
+
+  if (hops > 0) {
     const forwarded = req.headers?.['x-forwarded-for']
     if (forwarded) {
-      // The left-most entry is the original client; the rest are proxies.
-      const first = String(forwarded).split(',')[0]?.trim()
-      if (first) return first
+      const entries = String(forwarded).split(',').map((entry) => entry.trim()).filter(Boolean)
+      if (entries.length) {
+        const chosen = entries[Math.max(0, entries.length - hops)]
+        return normalizeAddress(chosen)
+      }
     }
 
     const real = req.headers?.['x-real-ip']
-    if (real) return String(real).trim()
+    if (real) return normalizeAddress(String(real).trim())
   }
 
-  return req.socket?.remoteAddress || req.connection?.remoteAddress || ''
+  return normalizeAddress(req.socket?.remoteAddress || req.connection?.remoteAddress || '')
+}
+
+/**
+ * Reduce an address to the key a client is limited under.
+ *
+ * @param {string} address
+ * @returns {string} an IPv4 address, an IPv6 /64 as `xxxx:xxxx:xxxx:xxxx::/64`,
+ *   or the input unchanged when it is not an address at all
+ */
+export function normalizeAddress(address) {
+  let value = String(address || '').trim()
+
+  // Some proxies include the port: `1.2.3.4:5678`, `[2001:db8::1]:443`.
+  const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(value)
+  if (bracketed) value = bracketed[1]
+  else if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(value)) value = value.slice(0, value.lastIndexOf(':'))
+
+  // A zone index (`fe80::1%eth0`) names an interface, not a different host.
+  value = value.replace(/%.*$/, '')
+
+  const mapped = /^(?:0{0,4}:){0,5}:?ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(value)
+  if (mapped && isIP(mapped[1]) === 4) return mapped[1]
+
+  if (isIP(value) !== 6) return value
+
+  const groups = expandIPv6(value)
+  if (!groups) return value
+
+  // Hex-spelled IPv4-mapped: ::ffff:102:304.
+  if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+    return `${groups[6] >> 8}.${groups[6] & 255}.${groups[7] >> 8}.${groups[7] & 255}`
+  }
+
+  return `${groups.slice(0, 4).map((g) => g.toString(16)).join(':')}::/64`
+}
+
+/** Eight 16-bit groups of a valid IPv6 literal, or null. */
+function expandIPv6(address) {
+  let text = address.toLowerCase()
+
+  // A trailing dotted quad is two groups.
+  const v4 = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(text)
+  if (v4) {
+    const [a, b, c, d] = v4.slice(1).map(Number)
+    text = text.slice(0, v4.index) + `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`
+  }
+
+  const halves = text.split('::')
+  if (halves.length > 2) return null
+
+  const head = halves[0] ? halves[0].split(':') : []
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : []
+  const missing = 8 - head.length - tail.length
+  if (halves.length === 1 ? missing !== 0 : missing < 0) return null
+
+  const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill('0'), ...tail].map((g) => parseInt(g, 16))
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null
 }

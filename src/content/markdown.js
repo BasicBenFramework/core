@@ -28,7 +28,7 @@
  * the delimiter-stack algorithm to resolve nesting the way readers expect.
  */
 
-import { escapeHtml, decodeEntities, isSafeUrl, DEFAULT_ALLOWED_SCHEMES } from './sanitize.js'
+import { escapeHtml, decodeEntities, isSafeUrl, prefixFragmentLinks, DEFAULT_ALLOWED_SCHEMES, DEFAULT_ID_PREFIX } from './sanitize.js'
 
 const ATX = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/
 const THEMATIC = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
@@ -39,6 +39,41 @@ const BLOCKQUOTE = /^ {0,3}>[ ]?/
 const SETEXT = /^ {0,3}(=+|-+)[ \t]*$/
 const TABLE_DELIM = /^[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/
 
+/*
+ * Resource bounds.
+ *
+ * Markdown arrives from users, so every scan here has to be bounded by the
+ * input, not by the input squared, and no recursion may follow the input's
+ * nesting unchecked. Before these, `'[a]('.repeat(40000)` took three and a half
+ * seconds and `'>'.repeat(20000)` overflowed the stack — either one a way to
+ * stall or crash a render endpoint with a single request.
+ *
+ * The limits sit far beyond anything a document written by a person contains,
+ * and past them the construct degrades to text rather than failing.
+ */
+
+/** Deepest blockquote/list nesting parsed as structure; deeper is text. */
+const MAX_BLOCK_DEPTH = 100
+
+/** Deepest inline nesting (emphasis, links) rendered as markup; deeper is text. */
+const MAX_INLINE_DEPTH = 100
+
+/**
+ * Unescaped parentheses a link destination may nest. commonmark.js uses the
+ * same bound; without one, every `](` re-scans the rest of the paragraph.
+ */
+const MAX_LINK_PAREN_DEPTH = 32
+
+/** CommonMark caps link labels at 999 characters. */
+const MAX_LABEL_LENGTH = 999
+
+/**
+ * Lines one reference definition may span. The spec sets none, but a label,
+ * destination and title that need more than this are not a definition anyone
+ * wrote, and without a bound every line re-joins the rest of its paragraph.
+ */
+const MAX_DEFINITION_LINES = 64
+
 /**
  * Render Markdown to HTML.
  *
@@ -47,6 +82,9 @@ const TABLE_DELIM = /^[ \t]*\|?[ \t]*:?-+:?[ \t]*(\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]
  * @param {string[]} [options.schemes] - URL schemes permitted in links/images
  * @param {boolean} [options.headingIds] - add `id` to headings for anchors
  * @param {(text: string) => string} [options.slugify]
+ * @param {string} [options.idPrefix] - prepended to heading ids; defaults to
+ *   `user-content-` (the sanitizer's prefix, so ids survive it unchanged), `''`
+ *   for bare slugs. `[x](#slug)` links to a heading are rewritten to match.
  * @returns {string} HTML. Contains only tags this module emits.
  */
 export function renderMarkdown(source, options = {}) {
@@ -56,15 +94,18 @@ export function renderMarkdown(source, options = {}) {
     schemes: options.schemes || DEFAULT_ALLOWED_SCHEMES,
     headingIds: options.headingIds !== false,
     slugify: options.slugify || defaultSlugify,
+    idPrefix: options.idPrefix ?? DEFAULT_ID_PREFIX,
+    emittedIds: new Set(),
     refs: Object.create(null),
-    usedIds: new Set()
+    usedIds: new Set(),
+    idCounters: new Map()
   }
 
   const lines = preprocess(String(source))
   const withoutRefs = extractReferenceDefinitions(lines, context.refs)
   const blocks = parseBlocks(withoutRefs)
 
-  return renderBlocks(blocks, context)
+  return prefixFragmentLinks(renderBlocks(blocks, context), context.emittedIds, context.idPrefix)
 }
 
 /** Normalize line endings and expand tabs to four-column stops. */
@@ -149,14 +190,20 @@ function extractReferenceDefinitions(lines, refs) {
  * @returns {{label: string, dest: string, title: string|null, next: number}|null}
  */
 function readDefinition(lines, start) {
+  // Most lines cannot begin a definition, and rejecting them before joining
+  // the region below is what keeps this linear: the join used to happen for
+  // every line, re-reading the rest of its paragraph each time.
+  if (!/^ {0,3}\[/.test(lines[start])) return null
+
   let end = start
-  while (end < lines.length && lines[end].trim() !== '') end++
+  const limit = Math.min(lines.length, start + MAX_DEFINITION_LINES)
+  while (end < limit && lines[end].trim() !== '') end++
   if (end === start) return null
 
   const text = lines.slice(start, end).join('\n')
 
   const label = /^ {0,3}\[((?:[^\][\\]|\\.)+)\]:/.exec(text)
-  if (!label || label[1].trim() === '') return null
+  if (!label || label[1].trim() === '' || label[1].length > MAX_LABEL_LENGTH) return null
 
   let pos = label[0].length
 
@@ -233,7 +280,7 @@ function unescape(text) {
  * this function, which keeps nesting straightforward at the cost of a little
  * re-scanning.
  */
-function parseBlocks(lines) {
+function parseBlocks(lines, depth = 0) {
   const blocks = []
   let i = 0
 
@@ -241,7 +288,7 @@ function parseBlocks(lines) {
     if (lines[i].trim() === '') { i++; continue }
 
     const from = i
-    const result = parseOneBlock(lines, i)
+    const result = parseOneBlock(lines, i, depth)
 
     // Every block records the lines it consumed. List looseness turns on
     // whether a blank line falls between two blocks, and that question cannot
@@ -259,9 +306,17 @@ function parseBlocks(lines) {
   return blocks
 }
 
-/** Identify and read whichever block starts at `start`. */
-function parseOneBlock(lines, start) {
+/**
+ * Identify and read whichever block starts at `start`.
+ *
+ * `depth` is how many containers (blockquotes, list items) enclose these
+ * lines. Past MAX_BLOCK_DEPTH a container marker is read as paragraph text:
+ * each level is a recursive call, and following the input's nesting without a
+ * bound is a stack overflow on demand.
+ */
+function parseOneBlock(lines, start, depth = 0) {
   const line = lines[start]
+  const nestable = depth < MAX_BLOCK_DEPTH
 
   if (THEMATIC.test(line)) {
     return { blocks: [{ type: 'hr' }], next: start + 1 }
@@ -281,13 +336,13 @@ function parseOneBlock(lines, start) {
     return { blocks: [result.block], next: result.next }
   }
 
-  if (BLOCKQUOTE.test(line)) {
-    const result = readBlockquote(lines, start)
+  if (nestable && BLOCKQUOTE.test(line)) {
+    const result = readBlockquote(lines, start, depth)
     return { blocks: [result.block], next: result.next }
   }
 
-  if (BULLET.test(line) || ORDERED.test(line)) {
-    const result = readList(lines, start)
+  if (nestable && (BULLET.test(line) || ORDERED.test(line))) {
+    const result = readList(lines, start, depth)
     return { blocks: [result.block], next: result.next }
   }
 
@@ -363,7 +418,7 @@ function readIndentedCode(lines, start) {
   }
 }
 
-function readBlockquote(lines, start) {
+function readBlockquote(lines, start, depth = 0) {
   const inner = []
   let i = start
 
@@ -387,7 +442,7 @@ function readBlockquote(lines, start) {
     i++
   }
 
-  return { block: { type: 'blockquote', children: parseBlocks(inner) }, next: i }
+  return { block: { type: 'blockquote', children: parseBlocks(inner, depth + 1) }, next: i }
 }
 /**
  * Read a list and its items.
@@ -405,7 +460,7 @@ function readBlockquote(lines, start) {
  * a paragraph's margin around every bullet, and the failure is not local — a
  * blank line inside a deeply nested item must not make its ancestors loose.
  */
-function readList(lines, start) {
+function readList(lines, start, depth = 0) {
   const ordered = !BULLET.test(lines[start])
   const first = ordered ? ORDERED.exec(lines[start]) : BULLET.exec(lines[start])
   const startNumber = ordered ? parseInt(first[2], 10) : null
@@ -487,7 +542,7 @@ function readList(lines, start) {
     items.push({ lines: itemLines })
   }
 
-  const parsed = items.map((item) => parseBlocks(item.lines))
+  const parsed = items.map((item) => parseBlocks(item.lines, depth + 1))
 
   // A blank line inside an item makes the list loose — but only when it
   // separates two of *that item's own* blocks. A blank inside a nested list
@@ -651,9 +706,15 @@ function readParagraph(lines, start) {
       }
     }
 
-    if (THEMATIC.test(line) || ATX.test(line) || FENCE.test(line) || BLOCKQUOTE.test(line)) break
-    if (interruptsParagraph(line)) break
-    if (content.length > 0 && isTableStart(lines, i)) break
+    // Only a line *after* the first can interrupt. The first reached here
+    // because no other block claimed it — normally that means it is plain
+    // text, and past the nesting limit it means a container marker that is
+    // being read as text on purpose. Breaking on it dropped the line.
+    if (content.length > 0) {
+      if (THEMATIC.test(line) || ATX.test(line) || FENCE.test(line) || BLOCKQUOTE.test(line)) break
+      if (interruptsParagraph(line)) break
+      if (isTableStart(lines, i)) break
+    }
 
     // Leading indentation is dropped but trailing spaces are kept: two of them
     // before a newline is the hard-break syntax, and trimming here would have
@@ -684,8 +745,12 @@ function renderBlock(block, context) {
       const inner = renderInlines(block.content, context)
       if (!context.headingIds) return `<h${block.level}>${inner}</h${block.level}>\n`
 
-      const id = uniqueId(context, context.slugify(stripInlineMarkup(block.content)))
-      return `<h${block.level}${id ? ` id="${escapeHtml(id)}"` : ''}>${inner}</h${block.level}>\n`
+      const slug = uniqueId(context, context.slugify(stripInlineMarkup(block.content)))
+      if (!slug) return `<h${block.level}>${inner}</h${block.level}>\n`
+
+      const id = escapeHtml(context.idPrefix + slug)
+      context.emittedIds.add(id)
+      return `<h${block.level} id="${id}">${inner}</h${block.level}>\n`
     }
 
     case 'code': {
@@ -751,9 +816,13 @@ function alignAttr(align) {
 function uniqueId(context, base) {
   if (!base) return ''
 
+  // Each base remembers the next suffix to try. Starting from -2 every time
+  // made a document of N identical headings cost N² lookups — over a minute
+  // for 50,000 `# a` lines.
+  let n = context.idCounters.get(base) || 2
   let id = base
-  let n = 2
   while (context.usedIds.has(id)) id = `${base}-${n++}`
+  context.idCounters.set(base, n)
 
   context.usedIds.add(id)
   return id
@@ -801,8 +870,17 @@ function parseInlines(text, context) {
   let tail = head
   /** @type {Array} Delimiter runs, in source order. */
   const delimiters = []
-  /** @type {Array} Unmatched `[` and `![`. */
+  /**
+   * Unmatched `[` and `![`. Openers below `brackets.floor` are inactive: a
+   * link closed above them, and links do not nest. Tracking that as a floor
+   * rather than a flag on each opener is what keeps closing a link O(1) —
+   * flagging them all walked the whole stack once per link.
+   */
   const brackets = []
+  brackets.floor = 0
+
+  /** Memo for scans that cannot succeed again; see readInlineDestination. */
+  const scan = { noCloser: Object.create(null), backtickRuns: null }
 
   const append = (node) => {
     node.prev = tail
@@ -835,14 +913,17 @@ function parseInlines(text, context) {
     }
 
     if (char === '`') {
-      const result = readCodeSpan(text, i)
-      if (result) {
+      const result = readCodeSpan(text, i, scan)
+      if (result.literal !== undefined) {
         append({ type: 'code', literal: result.literal })
         i = result.next
         continue
       }
-      append({ type: 'text', literal: '`' })
-      i++
+      // An unmatched run is literal as a whole. Re-trying from its second
+      // backtick both misreads ``` ``foo` ``` and rescans the paragraph once
+      // per backtick.
+      append({ type: 'text', literal: text.slice(i, result.next) })
+      i = result.next
       continue
     }
 
@@ -871,20 +952,20 @@ function parseInlines(text, context) {
 
     if (char === '!' && text[i + 1] === '[') {
       const node = append({ type: 'text', literal: '![' })
-      brackets.push({ node, image: true, index: delimiters.length, position: i, active: true })
+      brackets.push({ node, image: true, index: delimiters.length, position: i })
       i += 2
       continue
     }
 
     if (char === '[') {
       const node = append({ type: 'text', literal: '[' })
-      brackets.push({ node, image: false, index: delimiters.length, position: i, active: true })
+      brackets.push({ node, image: false, index: delimiters.length, position: i })
       i++
       continue
     }
 
     if (char === ']') {
-      const result = closeBracket(text, i, brackets, delimiters, head, tail, context, append)
+      const result = closeBracket(text, i, brackets, delimiters, context, scan)
       if (result) {
         tail = result.tail
         i = result.next
@@ -914,7 +995,8 @@ function parseInlines(text, context) {
     }
 
     if (char === '&') {
-      const entity = /^&(#[xX][0-9a-fA-F]+|#[0-9]+|[a-zA-Z][a-zA-Z0-9]{1,31});/.exec(text.slice(i))
+      ENTITY.lastIndex = i
+      const entity = ENTITY.exec(text)
       if (entity) {
         append({ type: 'text', literal: decodeEntities(entity[0]) })
         i += entity[0].length
@@ -935,6 +1017,12 @@ function parseInlines(text, context) {
 
   return head
 }
+
+/** Sticky, so it matches at an offset instead of on a copy of the rest. */
+const ENTITY = /&(#[xX][0-9a-fA-F]+|#[0-9]+|[a-zA-Z][a-zA-Z0-9]{1,31});/y
+const AUTOLINK_URI = /<([a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^<>\x00-\x20]*)>/y
+const AUTOLINK_EMAIL = /<([a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/y
+const LINK_LABEL = /\[((?:[^\][\\]|\\.)*)\]/y
 
 function findNextSpecial(text, from) {
   for (let i = from; i < text.length; i++) {
@@ -960,16 +1048,35 @@ function trimTrailingSpaces(node) {
  *
  * The closing run must be exactly as long as the opening one, which is what
  * lets `` `a ` b` `` hold a backtick.
+ *
+ * Finding that closer by searching the rest of the text from every opener is
+ * quadratic — runs of one, two, three… backticks each search to the end. So
+ * every run in the text is indexed once by length, and each opener looks up
+ * the first run of its length after it.
+ *
+ * @returns {{ literal?: string, next: number }} `literal` is absent when the
+ *   run has no closer; `next` is then the end of the opening run.
  */
-function readCodeSpan(text, start) {
-  const open = /^`+/.exec(text.slice(start))[0]
-  const closer = new RegExp(`(?<!\`)\`{${open.length}}(?!\`)`)
-  const rest = text.slice(start + open.length)
-  const match = closer.exec(rest)
+function readCodeSpan(text, start, scan) {
+  let end = start
+  while (text[end] === '`') end++
+  const length = end - start
 
-  if (!match) return null
+  if (!scan.backtickRuns) scan.backtickRuns = indexBacktickRuns(text)
 
-  let literal = rest.slice(0, match.index).replace(/\n/g, ' ')
+  const runs = scan.backtickRuns.get(length)
+  let closeAt = -1
+
+  if (runs) {
+    // Openers are visited left to right, so a cursor per length only moves
+    // forward and the lookups cost O(runs) in total.
+    while (runs.cursor < runs.starts.length && runs.starts[runs.cursor] < end) runs.cursor++
+    if (runs.cursor < runs.starts.length) closeAt = runs.starts[runs.cursor]
+  }
+
+  if (closeAt === -1) return { next: end }
+
+  let literal = text.slice(end, closeAt).replace(/\n/g, ' ')
 
   // One space is stripped from each end when both are present, so `` ` `` can
   // be written as `` ` ``.
@@ -977,14 +1084,32 @@ function readCodeSpan(text, start) {
     literal = literal.slice(1, -1)
   }
 
-  return { literal, next: start + open.length + match.index + open.length }
+  return { literal, next: closeAt + length }
+}
+
+/** Every maximal backtick run, grouped by length, in source order. */
+function indexBacktickRuns(text) {
+  const runs = new Map()
+  let i = text.indexOf('`')
+
+  while (i !== -1 && i < text.length) {
+    let end = i
+    while (text[end] === '`') end++
+
+    const length = end - i
+    if (!runs.has(length)) runs.set(length, { starts: [], cursor: 0 })
+    runs.get(length).starts.push(i)
+
+    i = text.indexOf('`', end)
+  }
+
+  return runs
 }
 
 /** Read `<https://…>` or `<user@host>`. */
 function readAutolink(text, start, context) {
-  const rest = text.slice(start)
-
-  const uri = /^<([a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^<>\x00-\x20]*)>/.exec(rest)
+  AUTOLINK_URI.lastIndex = start
+  const uri = AUTOLINK_URI.exec(text)
   if (uri) {
     const dest = decodeEntities(uri[1])
     if (!isSafeUrl(dest, context.schemes)) {
@@ -996,7 +1121,8 @@ function readAutolink(text, start, context) {
     }
   }
 
-  const email = /^<([a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)>/.exec(rest)
+  AUTOLINK_EMAIL.lastIndex = start
+  const email = AUTOLINK_EMAIL.exec(text)
   if (email) {
     return {
       node: { type: 'link', dest: `mailto:${email[1]}`, title: null, children: textNode(email[1]) },
@@ -1019,48 +1145,65 @@ function textNode(literal) {
  *
  * Returns null when there is no matching opener or no destination follows, in
  * which case the `]` is literal text.
+ *
+ * Only the top of the bracket stack is considered, as in the CommonMark
+ * reference algorithm: an inactive or failed opener is removed rather than
+ * skipped, so each `]` costs O(1) instead of a walk down the stack.
  */
-function closeBracket(text, index, brackets, delimiters, head, tail, context, append) {
-  let opener = null
-  for (let i = brackets.length - 1; i >= 0; i--) {
-    if (brackets[i].active) { opener = brackets[i]; break }
-  }
-
+function closeBracket(text, index, brackets, delimiters, context, scan) {
+  const opener = brackets[brackets.length - 1]
   if (!opener) return null
 
-  const after = text.slice(index + 1)
+  const removeOpener = () => {
+    brackets.pop()
+    if (brackets.floor > brackets.length) brackets.floor = brackets.length
+  }
+
+  // Below the floor: a link has closed since this opener, and links do not nest.
+  if (brackets.length - 1 < brackets.floor) {
+    removeOpener()
+    return null
+  }
+
   let dest = null
   let title = null
-  let consumed = 0
+  let next = index + 1
 
-  const inline = readInlineDestination(after)
+  const inline = text[index + 1] === '(' ? readInlineDestination(text, index + 1, scan) : null
   if (inline) {
     dest = inline.dest
     title = inline.title
-    consumed = inline.length
+    next = inline.end
   } else {
     // Reference link: [text][label], [text][] or [text].
-    const labelMatch = /^\[((?:[^\][\\]|\\.)*)\]/.exec(after)
-    const inner = text.slice(opener.position + (opener.image ? 2 : 1), index)
-    const label = normalizeLabel(labelMatch && labelMatch[1] ? labelMatch[1] : inner)
-    const ref = context.refs[label]
+    LINK_LABEL.lastIndex = index + 1
+    const labelMatch = LINK_LABEL.exec(text)
+    const innerStart = opener.position + (opener.image ? 2 : 1)
+    const rawLabel = labelMatch && labelMatch[1] ? labelMatch[1] : null
+
+    // A label over the spec's limit cannot name a definition, and slicing the
+    // text between every `]` and its opener is quadratic for `[[[…]]]`.
+    const label = rawLabel !== null
+      ? (rawLabel.length <= MAX_LABEL_LENGTH ? normalizeLabel(rawLabel) : null)
+      : (index - innerStart <= MAX_LABEL_LENGTH ? normalizeLabel(text.slice(innerStart, index)) : null)
+    const ref = label === null ? undefined : context.refs[label]
 
     if (ref) {
       dest = ref.dest
       title = ref.title
-      consumed = labelMatch ? labelMatch[0].length : 0
+      next = labelMatch ? index + 1 + labelMatch[0].length : index + 1
     }
   }
 
   if (dest === null) {
-    opener.active = false
+    removeOpener()
     return null
   }
 
   const decoded = decodeEntities(dest)
   if (!isSafeUrl(decoded, context.schemes)) {
     // The link text still renders; only the destination is dropped.
-    opener.active = false
+    removeOpener()
     return null
   }
 
@@ -1085,62 +1228,103 @@ function closeBracket(text, index, brackets, delimiters, head, tail, context, ap
   node.prev = before
   node.next = null
 
-  brackets.length = brackets.indexOf(opener)
+  brackets.pop()
 
   // A link cannot nest inside a link, so any opener still on the stack is spent.
-  if (!opener.image) {
-    for (const bracket of brackets) bracket.active = false
-  }
+  if (!opener.image) brackets.floor = brackets.length
+  else if (brackets.floor > brackets.length) brackets.floor = brackets.length
 
   delimiters.length = opener.index
 
-  return { tail: node, next: index + 1 + consumed }
+  return { tail: node, next }
 }
 
-/** Read `(dest "title")` immediately after a `]`. */
-function readInlineDestination(text) {
-  if (text[0] !== '(') return null
+const LINK_WHITESPACE = /[ \t\n]/
 
-  let i = 1
-  while (i < text.length && /[ \t\n]/.test(text[i])) i++
+/**
+ * Read `(dest "title")` starting at the `(` at `start`.
+ *
+ * Works at offsets into the paragraph rather than on `text.slice(...)`; the
+ * copy alone made every `](` cost the length of the rest of the text. Two
+ * scans could still run to the end of the text from every opener, and both
+ * are bounded:
+ *
+ * - an unbracketed destination stops after MAX_LINK_PAREN_DEPTH nested `(`;
+ * - a title looking for its closing quote or paren records, on failure, that
+ *   no such closer exists from that point on, so later titles fail at once.
+ *   That memo is sound because a later scan covers a subset of the text the
+ *   failed one already searched, starting at the same escape alignment.
+ *
+ * @returns {{ dest: string, title: string|null, end: number }|null} `end` is
+ *   the index after the closing `)`.
+ */
+function readInlineDestination(text, start, scan) {
+  let i = start + 1
+  while (i < text.length && LINK_WHITESPACE.test(text[i])) i++
 
   let dest = ''
 
   if (text[i] === '<') {
-    const end = text.indexOf('>', i)
-    if (end === -1) return null
-    dest = text.slice(i + 1, end)
-    i = end + 1
+    // A bracketed destination may not contain a line ending or an unescaped
+    // `<` (CommonMark 6.3), which also stops it scanning to the end of the text.
+    let j = i + 1
+    while (j < text.length) {
+      const c = text[j]
+      if (c === '\\' && j + 1 < text.length) { j += 2; continue }
+      if (c === '>' || c === '<' || c === '\n') break
+      j++
+    }
+    if (text[j] !== '>') return null
+    dest = unescape(text.slice(i + 1, j))
+    i = j + 1
   } else {
     let depth = 0
     const startDest = i
     while (i < text.length) {
       const c = text[i]
       if (c === '\\' && text[i + 1]) { i += 2; continue }
-      if (c === '(') depth++
-      else if (c === ')') { if (depth === 0) break; depth-- }
-      else if (/[ \t\n]/.test(c)) break
+      if (c === '(') {
+        depth++
+        if (depth > MAX_LINK_PAREN_DEPTH) return null
+      } else if (c === ')') { if (depth === 0) break; depth-- }
+      else if (LINK_WHITESPACE.test(c)) break
       i++
     }
+    if (depth !== 0) return null
     // Only punctuation is escapable, so the backslash in a Windows-style path
     // stays put rather than silently vanishing.
     dest = unescape(text.slice(startDest, i))
   }
 
-  while (i < text.length && /[ \t\n]/.test(text[i])) i++
+  while (i < text.length && LINK_WHITESPACE.test(text[i])) i++
 
   let title = null
-  const titleMatch = /^(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|\(((?:[^)\\]|\\.)*)\))/.exec(text.slice(i))
-  if (titleMatch) {
-    title = unescape(titleMatch[1] ?? titleMatch[2] ?? titleMatch[3])
-    i += titleMatch[0].length
+  const quote = text[i]
+  if (quote === '"' || quote === "'" || quote === '(') {
+    const closer = quote === '(' ? ')' : quote
+    const from = i + 1
+    let j = from
+
+    if (from >= (scan.noCloser[closer] ?? Infinity)) return null
+
+    while (j < text.length && text[j] !== closer) {
+      j += text[j] === '\\' && j + 1 < text.length ? 2 : 1
+    }
+
+    if (j >= text.length) {
+      scan.noCloser[closer] = Math.min(scan.noCloser[closer] ?? Infinity, from)
+      return null
+    }
+
+    title = unescape(text.slice(from, j))
+    i = j + 1
   }
 
-  while (i < text.length && /[ \t\n]/.test(text[i])) i++
+  while (i < text.length && LINK_WHITESPACE.test(text[i])) i++
 
   if (text[i] !== ')') return null
 
-  return { dest, title, length: i + 1 }
+  return { dest, title, end: i + 1 }
 }
 
 /**
@@ -1188,6 +1372,24 @@ function processEmphasis(delimiters, stackBottom) {
   const bottom = stackBottom === null ? 0 : stackBottom
   const openersBottom = { '*': [bottom, bottom, bottom], _: [bottom, bottom, bottom], '~': [bottom, bottom, bottom] }
 
+  // The reference implementation unlinks spent delimiters from a linked list
+  // so no search walks over them twice. With an array the same effect comes
+  // from jump pointers over inactive entries, compressed as they are followed
+  // (a delimiter never becomes active again, so a pointer never goes stale).
+  // Without this, `'_a*'.repeat(n) + '*b_'.repeat(n)` walked back over every
+  // spent delimiter for every closer: nine seconds at 200 kB.
+  const jump = []
+  const prevLive = (from) => {
+    let j = from
+    const path = []
+    while (j >= bottom && !(delimiters[j] && delimiters[j].active)) {
+      path.push(j)
+      j = jump[j] !== undefined ? jump[j] : j - 1
+    }
+    for (const k of path) jump[k] = j
+    return j
+  }
+
   let closerIdx = bottom
 
   while (closerIdx < delimiters.length) {
@@ -1201,7 +1403,7 @@ function processEmphasis(delimiters, stackBottom) {
     const lowerBound = openersBottom[closer.char][closer.origDelims % 3]
     let openerIdx = -1
 
-    for (let i = closerIdx - 1; i >= lowerBound && i >= bottom; i--) {
+    for (let i = prevLive(closerIdx - 1); i >= lowerBound && i >= bottom; i = prevLive(i - 1)) {
       const candidate = delimiters[i]
       if (!candidate || !candidate.active || candidate.char !== closer.char) continue
       if (!candidate.canOpen || candidate.numDelims === 0) continue
@@ -1259,8 +1461,8 @@ function processEmphasis(delimiters, stackBottom) {
     closer.node.prev = wrapper
 
     // Delimiters strictly between the pair can never match anything now.
-    for (let i = openerIdx + 1; i < closerIdx; i++) {
-      if (delimiters[i]) delimiters[i].active = false
+    for (let i = prevLive(closerIdx - 1); i > openerIdx; i = prevLive(i - 1)) {
+      delimiters[i].active = false
     }
 
     if (opener.numDelims === 0) opener.active = false
@@ -1272,19 +1474,30 @@ function processEmphasis(delimiters, stackBottom) {
  * Node rendering
  * ------------------------------------------------------------------ */
 
-function renderNodes(head, context) {
+function renderNodes(head, context, depth = 0) {
   let out = ''
   let node = head.next
 
   while (node) {
-    out += renderNode(node, context)
+    out += renderNode(node, context, depth)
     node = node.next
   }
 
   return out
 }
 
-function renderNode(node, context) {
+/**
+ * Render one inline node.
+ *
+ * `****…a…****` nests one `<strong>` per pair of asterisks, and rendering
+ * recurses once per level; past MAX_INLINE_DEPTH the rest is flattened to
+ * text, which plainText does without recursion.
+ */
+function renderNode(node, context, depth = 0) {
+  if (node.children && node.type !== 'image' && depth >= MAX_INLINE_DEPTH) {
+    return escapeHtml(plainText(node.children))
+  }
+
   switch (node.type) {
     case 'text':
       return escapeHtml(node.literal)
@@ -1299,17 +1512,17 @@ function renderNode(node, context) {
       return '<br />\n'
 
     case 'em':
-      return `<em>${renderNodes(node.children, context)}</em>`
+      return `<em>${renderNodes(node.children, context, depth + 1)}</em>`
 
     case 'strong':
-      return `<strong>${renderNodes(node.children, context)}</strong>`
+      return `<strong>${renderNodes(node.children, context, depth + 1)}</strong>`
 
     case 'del':
-      return `<del>${renderNodes(node.children, context)}</del>`
+      return `<del>${renderNodes(node.children, context, depth + 1)}</del>`
 
     case 'link': {
       const title = node.title ? ` title="${escapeHtml(node.title)}"` : ''
-      return `<a href="${escapeHtml(encodeDestination(node.dest))}"${title}>${renderNodes(node.children, context)}</a>`
+      return `<a href="${escapeHtml(encodeDestination(node.dest))}"${title}>${renderNodes(node.children, context, depth + 1)}</a>`
     }
 
     case 'image': {
@@ -1342,15 +1555,26 @@ function encodeDestination(dest) {
   })
 }
 
-/** Flatten a node list to its text, for image alt attributes. */
+/**
+ * Flatten a node list to its text, for image alt attributes and for inline
+ * nesting past the render limit. Iterative, with an explicit stack of where to
+ * resume, so input nesting cannot reach the call stack.
+ */
 function plainText(head) {
   let out = ''
+  const resume = []
   let node = head.next
 
-  while (node) {
+  while (node || resume.length) {
+    if (!node) { node = resume.pop(); continue }
+
     if (node.type === 'text' || node.type === 'code') out += node.literal
-    else if (node.children) out += plainText(node.children)
     else if (node.type === 'softbreak' || node.type === 'linebreak') out += ' '
+    else if (node.children) {
+      resume.push(node.next)
+      node = node.children.next
+      continue
+    }
     node = node.next
   }
 

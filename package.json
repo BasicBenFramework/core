@@ -16,6 +16,17 @@
     "basicben": "./bin/cli.js"
   },
   "types": "./types/index.d.ts",
+  "files": [
+    "bin/",
+    "src/",
+    "types/",
+    "stubs/",
+    "LICENSE",
+    "README.md",
+    "!**/*.test.js",
+    "!src/content/commonmark-spec.json",
+    "!src/storage/aws-sigv4-suite.json"
+  ],
   "exports": {
     ".": {
       "types": "./types/index.d.ts",

@@ -27,7 +27,7 @@ export const commandMeta: {
         options: {
             '--watch, -w': string;
             '--coverage': string;
-            '--ui': string;
+            '--<flag>': string;
         };
     };
     'make:controller': {

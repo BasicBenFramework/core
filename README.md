@@ -222,7 +222,7 @@ basicben dev                       # Start Vite + Node dev server
 basicben build                     # Bundle client + server for production
 basicben build --static            # Build client only (for static hosts)
 basicben start                     # Run production server
-basicben test                      # Run tests with Vitest
+basicben test                      # Run tests with node --test
 
 # Scaffolding
 basicben make:controller <name>    # Generate a controller
@@ -833,6 +833,16 @@ not a courtesy check. HTML, SVG and JavaScript are refused outright: a bucket
 served from a domain hands those back with the type they were stored under,
 which is same-origin script execution.
 
+The stored key's extension comes from the **validated content type**, not the
+filename: `photo.html` declared as `image/png` is stored as `…-photo.png`
+(`.jpg`, `.png`, `.gif`, `.webp`, `.avif`, `.pdf`, `.txt`, `.md`, `.csv`,
+`.mp4`, `.webm`, `.mp3`, `.ogg`, `.wav`; a custom allowed type keeps a harmless
+extension or becomes `.bin`). On the local driver the signed PUT URL is bound to
+the content type, and the `/uploads` mount sends `X-Content-Type-Options:
+nosniff` and `Content-Security-Policy: sandbox` with every file, and serves any
+HTML, SVG, XML or JavaScript that got there some other way as an
+`application/octet-stream` download.
+
 Two things a presigned URL does not do, and what is done about each:
 
 **It does not cap the size.** A URL issued for a thumbnail will accept a
@@ -920,6 +930,15 @@ It is an allowlist: anything not named is removed. `script`, `style`, `iframe`,
 unwrapped so their text survives. Event handlers and `style` attributes never
 pass. URLs are checked after entity decoding, so `&#x6A;avascript:` is caught.
 
+Every `id` and `name` gets a `user-content-` prefix, so content cannot clobber
+page globals (`<a id="config">` becoming `window.config`). Heading anchors carry
+it too — `# Intro` renders `id="user-content-intro"`, and `headings()` returns
+the same id — and an in-content `[link](#intro)` to an id in the same document
+is rewritten to match. Pass `idPrefix: ''` to `renderContent`, `sanitizeHtml`
+and `headings` for bare ids. A link with a `target` always gets
+`rel="noopener noreferrer"` (a supplied `rel="opener"` is dropped), and the only
+`<input>` that survives is a disabled checkbox.
+
 ### Extending the pipeline
 
 A listener can post-process rendered HTML through the `content.render` filter —
@@ -1006,8 +1025,11 @@ const store = new DatabaseStore({ getDb })   // needs the rate_limits table
 By default the socket address. **`X-Forwarded-For` is ignored unless you set
 `trustProxy`**, and that default is deliberate: the header is client-supplied,
 so honouring it on a directly-exposed server lets anyone rotate their apparent
-address and bypass every limit. Behind a proxy that overwrites it, set
-`trustProxy: true`.
+address and bypass every limit. Behind a proxy, set `trustProxy` to the number
+of proxies in front of the app (`true` means one). The client address is then
+read **from the right** of `X-Forwarded-For` — the entry your own proxy
+appended — never the left-most entry, which the client controls. IPv4-mapped
+addresses are keyed as IPv4 and IPv6 addresses by their /64.
 
 Pass `key` to group differently — by account rather than by address, for
 instance:
@@ -1300,22 +1322,37 @@ post, page or media item is created, updated or deleted.
 ```
 POST /your-hook
 X-BasicBen-Event: post.created
+X-BasicBen-Timestamp: 1787040000
 X-BasicBen-Signature: sha256=<hex>
 
-{ "event": "post.created", "id": 7, "slug": "hello", "at": "2026-08-18T…" }
+{ "id": 7, "slug": "hello", "event": "post.created", "at": "2026-08-18T…" }
 ```
 
-The signature is an HMAC of the exact body keyed with `APP_KEY`. Verify it over
-the **raw** bytes — a parsed and re-serialised body does not reproduce it, which
-is what `bodyParser({ skip })` exists for.
+The signature is an HMAC-SHA256 of `` `${timestamp}.${body}` `` — the
+`X-BasicBen-Timestamp` value, a dot, and the exact body — keyed with the secret
+passed to `deliver()` (a dedicated `WEBHOOK_SECRET`; receivers must hold it, so
+never `APP_KEY`). `deliver()` throws if the secret is missing. Verify over the
+**raw** bytes — a parsed and re-serialised body does not reproduce it, which is
+what `bodyParser({ skip })` exists for — and pass the timestamp, so a captured
+delivery older than five minutes is refused:
 
 ```js
 import { verify } from '@basicbenframework/core/webhooks'
 
-if (!verify(rawBody, req.headers['x-basicben-signature'], process.env.APP_KEY)) {
-  return res.json({ error: 'Bad signature' }, 401)
-}
+const ok = verify(rawBody, req.headers['x-basicben-signature'], process.env.WEBHOOK_SECRET, {
+  timestamp: req.headers['x-basicben-timestamp']   // tolerance: 300 seconds by default
+})
+if (!ok) return res.json({ error: 'Bad signature' }, 401)
 ```
+
+`event` and `at` are always the framework's: `data` cannot override them.
+
+Receivers must be public addresses. Each host is resolved and loopback,
+private (RFC 1918), link-local (including the `169.254.169.254` metadata
+service), IPv6 unique-local, CGNAT and other non-public ranges are refused, so
+the settings screen cannot be used to make the server POST to its own network.
+Pass `allowPrivate: true` to `deliver()` for an internal receiver. Redirects are
+not followed and response bodies are discarded.
 
 Delivery is **at-most-once**: a failure is logged and dropped, with no retry
 queue. A durable one needs a table and a worker, and an in-memory retry loop
@@ -1351,27 +1388,29 @@ reject that pairing, so it would break every credentialed request silently.
 
 ## Testing
 
-BasicBen uses Vitest for application tests:
+`basicben test` runs Node's built-in test runner (`node --test`) — nothing to
+install. With no arguments it runs `tests/**/*.test.{js,mjs,ts}` and
+`src/**/*.test.{js,mjs,ts}`; Node 24 strips TypeScript types itself.
 
 ```bash
-basicben test              # Run once
-basicben test --watch      # Watch mode
-basicben test --coverage   # With coverage report
-basicben test --ui         # Open Vitest UI
+basicben test                              # Run once
+basicben test --watch                      # Watch mode
+basicben test --coverage                   # With coverage report
+basicben test tests/auth.test.js           # Specific files or globs
+basicben test --test-name-pattern=login    # Any other flag goes to node --test
 ```
 
-Create test files with `.test.js` or `.spec.js` suffix:
-
 ```js
-// src/controllers/UserController.test.js
-import { describe, it, expect } from 'vitest'
-import { UserController } from './UserController.js'
+// tests/UserController.test.js
+import { describe, test, mock } from 'node:test'
+import assert from 'node:assert'
+import { UserController } from '../src/controllers/UserController.js'
 
 describe('UserController', () => {
-  it('returns users list', async () => {
-    const res = { json: vi.fn() }
+  test('returns users list', async () => {
+    const res = { json: mock.fn() }
     await UserController.index({}, res)
-    expect(res.json).toHaveBeenCalled()
+    assert.strictEqual(res.json.mock.callCount(), 1)
   })
 })
 ```
@@ -1391,6 +1430,12 @@ APP_KEY=your-secret-key
 ```
 
 A `.env.example` is included in every new project. Commit that, not `.env`.
+
+`APP_KEY` signs local storage URLs and upload tickets. In production
+(`NODE_ENV=production`) the server **refuses to start** without one of at least
+32 characters; new projects get a random 64-character key. In development a
+missing key is replaced by a random per-process key, with a warning — signed
+URLs then do not survive a restart.
 
 ---
 
@@ -1442,6 +1487,16 @@ export default {
     url: process.env.DATABASE_URL || './data.db'
   },
 
+  // Security headers, on by default: X-Content-Type-Options: nosniff,
+  // Referrer-Policy: strict-origin-when-cross-origin, X-Frame-Options: DENY,
+  // Content-Security-Policy: frame-ancestors 'none', and in production
+  // Strict-Transport-Security. Override one by name, `false` to drop it, or
+  // set the whole option to false. A handler that sets its own header wins.
+  securityHeaders: {
+    frameOptions: 'SAMEORIGIN',
+    contentSecurityPolicy: "frame-ancestors 'self'"
+  },
+
   // Auto-load routes from src/routes (default: true)
   autoloadRoutes: true,
 
@@ -1487,8 +1542,10 @@ Errors thrown inside a callback are caught and logged — they do not abort the 
 |------|------|-------------|
 | `server.starting` | action | Before server starts |
 | `server.started` | action | Server is ready |
-| `request.before` | action | Before route handler |
+| `request.before` | filter | Before route handler; receives and returns `{ req, res }` — return it with `handled: true` to short-circuit |
 | `request.after` | action | After route handler |
+| `request.error` | action | An error reached the default error handler |
+| `server.stopping` | action | `app.stop()` was called |
 | `post.created` | action | After post is created |
 | `comment.created` | action | After comment is created |
 | `content.render` | filter | Transform rendered HTML |

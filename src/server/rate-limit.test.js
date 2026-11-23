@@ -18,6 +18,7 @@ import {
   rateLimit,
   parseDuration,
   clientAddress,
+  normalizeAddress,
   MemoryStore,
   DatabaseStore
 } from './rate-limit.js'
@@ -311,9 +312,39 @@ describe('clientAddress', () => {
     assert.strictEqual(clientAddress(req({ 'x-forwarded-for': '1.2.3.4' }), true), '1.2.3.4')
   })
 
-  test('takes the left-most entry, which is the original client', () => {
-    const chained = req({ 'x-forwarded-for': '1.2.3.4, 10.0.0.5, 10.0.0.6' })
-    assert.strictEqual(clientAddress(chained, true), '1.2.3.4')
+  test('trustProxy: true takes the right-most entry, the one our proxy added', () => {
+    // The left-most entry is whatever the client sent. Reading it let anyone
+    // rotate their address by prepending a fresh one per request.
+    const spoofed = req({ 'x-forwarded-for': '6.6.6.6, 1.2.3.4' })
+    assert.strictEqual(clientAddress(spoofed, true), '1.2.3.4')
+  })
+
+  test('trustProxy: n takes the n-th entry from the right', () => {
+    const chained = req({ 'x-forwarded-for': '6.6.6.6, 1.2.3.4, 10.0.0.5, 10.0.0.6' })
+    assert.strictEqual(clientAddress(chained, 1), '10.0.0.6')
+    assert.strictEqual(clientAddress(chained, 3), '1.2.3.4')
+  })
+
+  test('a header shorter than the hop count yields its left-most entry', () => {
+    assert.strictEqual(clientAddress(req({ 'x-forwarded-for': '1.2.3.4' }), 3), '1.2.3.4')
+  })
+
+  test('IPv4-mapped addresses are reported as IPv4', () => {
+    assert.strictEqual(clientAddress(req({}, '::ffff:127.0.0.1')), '127.0.0.1')
+    assert.strictEqual(normalizeAddress('::ffff:7f00:1'), '127.0.0.1')
+  })
+
+  test('IPv6 addresses are keyed by their /64', () => {
+    const a = clientAddress(req({}, '2001:db8:1:2:aaaa::1'))
+    const b = clientAddress(req({}, '2001:0db8:0001:0002:ffff:1:2:3'))
+    assert.strictEqual(a, '2001:db8:1:2::/64')
+    assert.strictEqual(a, b)
+    assert.strictEqual(normalizeAddress('[2001:db8::1]:443'), '2001:db8:0:0::/64')
+    assert.strictEqual(normalizeAddress('::1'), '0:0:0:0::/64')
+  })
+
+  test('a port on an IPv4 entry is dropped', () => {
+    assert.strictEqual(normalizeAddress('1.2.3.4:5678'), '1.2.3.4')
   })
 
   test('falls back to X-Real-IP', () => {

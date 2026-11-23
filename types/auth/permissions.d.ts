@@ -15,9 +15,17 @@ export function capabilitiesFor(role: string): string[];
 /**
  * Has this user confirmed their email address?
  *
- * Absent means yes. The flag arrives from the JWT, and a token issued before
- * verification existed carries no such claim — treating that as unverified
- * would lock out every already-signed-in user on deploy.
+ * Absent means yes — deliberately, and only absent. The flag arrives from the
+ * JWT, and a token issued before verification existed carries no such claim;
+ * treating that as unverified would lock out every already-signed-in user on
+ * deploy.
+ *
+ * `null` is not absent. It is an explicit "no value" — a nullable column, a
+ * claim someone set — and it used to count as verified too, which meant any
+ * path that produced a null (a LEFT JOIN, a failed lookup) granted full
+ * capabilities to an unverified account. It now fails closed. Callers with
+ * rows that predate verification should normalise them before this point,
+ * where the decision is visible.
  *
  * @param {Object} user
  * @returns {boolean}

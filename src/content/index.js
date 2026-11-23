@@ -31,7 +31,7 @@
  */
 
 import { renderMarkdown, defaultSlugify } from './markdown.js'
-import { sanitizeHtml, stripTags } from './sanitize.js'
+import { sanitizeHtml, stripTags, DEFAULT_ID_PREFIX } from './sanitize.js'
 import { hooks, HOOKS } from '../hooks/index.js'
 
 export { renderMarkdown } from './markdown.js'
@@ -42,7 +42,8 @@ export {
   decodeEntities,
   isSafeUrl,
   DEFAULT_ALLOWED,
-  DEFAULT_ALLOWED_SCHEMES
+  DEFAULT_ALLOWED_SCHEMES,
+  DEFAULT_ID_PREFIX
 } from './sanitize.js'
 
 /**
@@ -54,6 +55,7 @@ export {
  * @param {string[]} [options.schemes] - URL schemes permitted in links
  * @param {Object} [options.allowed] - sanitizer allowlist override
  * @param {boolean} [options.headingIds] - add ids to headings (default true)
+ * @param {string} [options.idPrefix] - prefix for ids in the output (default `user-content-`, `''` for none)
  * @param {boolean} [options.filter] - run the `content.render` hook (default true)
  * @returns {Promise<string>} sanitized HTML
  */
@@ -61,7 +63,8 @@ export async function renderContent(source, options = {}) {
   const html = renderMarkdown(source, {
     schemes: options.schemes,
     headingIds: options.headingIds,
-    slugify: options.slugify
+    slugify: options.slugify,
+    idPrefix: options.idPrefix
   })
 
   const filtered = options.filter === false
@@ -73,7 +76,8 @@ export async function renderContent(source, options = {}) {
   return sanitizeHtml(typeof filtered === 'string' ? filtered : html, {
     allowed: options.allowed,
     schemes: options.schemes,
-    allowDataImages: options.allowDataImages
+    allowDataImages: options.allowDataImages,
+    idPrefix: options.idPrefix
   })
 }
 
@@ -92,13 +96,15 @@ export function renderContentSync(source, options = {}) {
   const html = renderMarkdown(source, {
     schemes: options.schemes,
     headingIds: options.headingIds,
-    slugify: options.slugify
+    slugify: options.slugify,
+    idPrefix: options.idPrefix
   })
 
   return sanitizeHtml(html, {
     allowed: options.allowed,
     schemes: options.schemes,
-    allowDataImages: options.allowDataImages
+    allowDataImages: options.allowDataImages,
+    idPrefix: options.idPrefix
   })
 }
 
@@ -139,18 +145,23 @@ export function slugify(text) {
 /**
  * Read the headings out of a document, for a table of contents.
  *
- * Uses the same slug function the renderer does, so the returned ids match the
- * anchors actually present in the HTML.
+ * Uses the same slug function and id prefix the renderer does, so the returned
+ * ids match the anchors actually present in the HTML (`user-content-…` by
+ * default).
  *
  * @param {string} source - Markdown
  * @param {Object} [options]
+ * @param {(text: string) => string} [options.slugify]
+ * @param {string} [options.idPrefix] - defaults to `user-content-`, as in the renderer
  * @returns {Array<{level: number, text: string, id: string}>}
  */
 export function headings(source, options = {}) {
   if (!source) return []
 
   const slug = options.slugify || defaultSlugify
+  const prefix = options.idPrefix ?? DEFAULT_ID_PREFIX
   const used = new Set()
+  const counters = new Map()
   const found = []
 
   let inFence = null
@@ -173,12 +184,15 @@ export function headings(source, options = {}) {
     if (!text) continue
 
     const base = slug(text.replace(/[*_`~]/g, ''))
+    // A per-base counter, as in the renderer: restarting at -2 for every
+    // repeat is quadratic in the number of identical headings.
     let id = base
-    let n = 2
+    let n = counters.get(base) || 2
     while (used.has(id)) id = `${base}-${n++}`
+    counters.set(base, n)
     used.add(id)
 
-    found.push({ level: atx[1].length, text, id })
+    found.push({ level: atx[1].length, text, id: id ? prefix + id : id })
   }
 
   return found

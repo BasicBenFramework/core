@@ -557,11 +557,10 @@ describe('transactions', () => {
     await assert.rejects(() => db.all('SELECT * FROM doomed'), /doomed/)
   })
 
-  test('a nested transaction joins the open one rather than starting a second', async () => {
+  test('a nested transaction runs inside the open one rather than starting a second', async () => {
     // Migrations run inside a transaction now, and a migration wrapping its own
     // work in `db.transaction()` was legal before that. A second BEGIN on the
-    // same stream is refused, so the inner call has to hand back the adapter it
-    // already has.
+    // same stream is refused, so the inner call is a savepoint on that stream.
     await db.transaction(async (tx) => {
       const returned = await tx.transaction(async (inner) => {
         await inner.run('INSERT INTO users (name) VALUES (?)', ['Ada'])
@@ -584,6 +583,46 @@ describe('transactions', () => {
     )
 
     assert.strictEqual((await db.all('SELECT * FROM users')).length, 0)
+  })
+
+  test('a nested failure the caller catches undoes only the nested work', async () => {
+    await db.transaction(async (tx) => {
+      await tx.run('INSERT INTO users (name) VALUES (?)', ['outer'])
+      await assert.rejects(tx.transaction(async (inner) => {
+        await inner.run('INSERT INTO users (name) VALUES (?)', ['inner'])
+        throw new Error('inner failure')
+      }), /inner failure/)
+    })
+
+    assert.deepStrictEqual((await db.all('SELECT name FROM users')).map((r) => r.name), ['outer'])
+  })
+
+  test('concurrent statements inside a transaction are serialized on the baton', async () => {
+    // Promise.all used to send both requests with the same baton at once,
+    // which libSQL refuses for a stream. The mock server does not rotate
+    // batons, so overlap is measured directly.
+    let inFlight = 0
+    let most = 0
+    const counted = await createTursoAdapter(hrana.url, {
+      authToken: 'test-token',
+      fetch: async (...args) => {
+        inFlight++
+        most = Math.max(most, inFlight)
+        try { return await fetch(...args) } finally { inFlight-- }
+      }
+    })
+
+    await counted.transaction(async (tx) => {
+      await Promise.all([
+        tx.run('INSERT INTO users (name) VALUES (?)', ['a']),
+        tx.run('INSERT INTO users (name) VALUES (?)', ['b']),
+        tx.run('INSERT INTO users (name) VALUES (?)', ['c'])
+      ])
+    })
+
+    assert.strictEqual(most, 1, 'requests on the transaction stream overlapped')
+    assert.strictEqual((await db.all('SELECT * FROM users')).length, 3)
+    assert.strictEqual(hrana.openStreams(), 0)
   })
 })
 

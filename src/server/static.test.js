@@ -22,6 +22,7 @@ function mockRes() {
     body: '',
     headersSent: false,
     setHeader(k, v) { this.headers[k.toLowerCase()] = v },
+    getHeader(k) { return this.headers[k.toLowerCase()] },
     end(data) { if (data) this.body += data; this.ended = true },
     on() {},
     once() {},
@@ -216,5 +217,52 @@ describe('serveStatic conditional requests and ranges', () => {
 
     assert.strictEqual(res.body, '')
     assert.strictEqual(res.headers['content-length'], BODY.length)
+  })
+})
+
+describe('serveStatic untrusted (uploads) mount', () => {
+  let root
+  let previousCwd
+  let handler
+
+  before(async () => {
+    previousCwd = process.cwd()
+    root = mkdtempSync(join(tmpdir(), 'basicben-static-untrusted-'))
+    mkdirSync(join(root, 'uploads'), { recursive: true })
+    writeFileSync(join(root, 'uploads', 'evil.html'), '<script>alert(1)</script>')
+    writeFileSync(join(root, 'uploads', 'evil.svg'), '<svg onload="alert(1)"/>')
+    writeFileSync(join(root, 'uploads', 'photo.png'), 'png-bytes')
+    process.chdir(root)
+
+    const { serveStatic } = await import('./static.js')
+    handler = serveStatic({ dir: 'uploads', prefix: '/uploads', untrusted: true })
+  })
+
+  after(() => {
+    process.chdir(previousCwd)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  const get = (path) => run(handler, { method: 'GET', path, url: path, headers: {} })
+
+  for (const file of ['evil.html', 'evil.svg']) {
+    test(`${file} is a download, not a document`, async () => {
+      const res = await get(`/uploads/${file}`)
+
+      assert.strictEqual(res.headers['content-type'], 'application/octet-stream')
+      assert.strictEqual(res.headers['content-disposition'], 'attachment')
+      assert.strictEqual(res.headers['x-content-type-options'], 'nosniff')
+      assert.strictEqual(res.headers['content-security-policy'], 'sandbox')
+    })
+  }
+
+  test('an image is still served inline, sandboxed and unsniffable', async () => {
+    const res = await get('/uploads/photo.png')
+
+    assert.strictEqual(res.headers['content-type'], 'image/png')
+    assert.strictEqual(res.headers['content-disposition'], undefined)
+    assert.strictEqual(res.headers['x-content-type-options'], 'nosniff')
+    assert.strictEqual(res.headers['content-security-policy'], 'sandbox')
+    assert.strictEqual(res.body, 'png-bytes')
   })
 })

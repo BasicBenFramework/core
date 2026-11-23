@@ -233,6 +233,11 @@ describe('email verification gating', () => {
     assert.ok(isVerified(legacyAdmin))
   })
 
+  test('null is not absent: it counts as unverified', () => {
+    assert.strictEqual(isVerified({ email_verified: null }), false)
+    assert.strictEqual(can({ id: 1, role: ROLES.ADMIN, email_verified: null }, 'post.create'), false)
+  })
+
   test('0 and 1 are honoured, since SQLite has no boolean', () => {
     assert.strictEqual(isVerified({ email_verified: 0 }), false)
     assert.strictEqual(isVerified({ email_verified: 1 }), true)

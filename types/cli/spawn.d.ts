@@ -17,16 +17,3 @@ export function resolveBin(cwd: string, pkgName: string): string | null;
  * @throws {Error} If the package is not installed in the project
  */
 export function spawnBin(cwd: string, pkgName: string, args: string[], options?: any): import("node:child_process").ChildProcess;
-/**
- * Spawn npm
- *
- * npm itself lives outside node_modules, so it needs a shell on Windows.
- * The command is built as one string because passing an args array alongside
- * `shell: true` is deprecated (DEP0190) — safe here since every argument is a
- * fixed literal, never user input.
- *
- * @param {string[]} args - npm arguments, e.g. ['install']
- * @param {Object} options - node:child_process spawn options
- * @returns {import('node:child_process').ChildProcess}
- */
-export function spawnNpm(args: string[], options?: any): import("node:child_process").ChildProcess;

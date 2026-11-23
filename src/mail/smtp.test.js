@@ -216,6 +216,19 @@ describe('address handling', () => {
     assert.strictEqual(extractAddress('ada@example.com'), 'ada@example.com')
   })
 
+  test('refuses an address that would inject SMTP commands', () => {
+    for (const value of [
+      'a@b.com>\r\nRCPT TO:<victim@x.com',
+      'Ada <a@b.com\r\nDATA>',
+      'a@b.com\nRCPT TO:<x@y.z>',
+      'a b@c.com',
+      'a@b.com\u0000',
+      '<>'
+    ]) {
+      assert.throws(() => extractAddress(value), /Invalid email address/, JSON.stringify(value))
+    }
+  })
+
   test('splits a comma separated list', () => {
     assert.deepStrictEqual(
       extractAddresses('Ada <ada@e.com>, grace@e.com'),

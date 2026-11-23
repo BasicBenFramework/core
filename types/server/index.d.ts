@@ -23,6 +23,8 @@ export { cors } from "./cors.js";
 export { serveStatic } from "./static.js";
 export { Router, createRouter } from "./router.js";
 export { bodyParser, json } from "./body-parser.js";
+export { securityHeaders, DEFAULT_SECURITY_HEADERS } from "./security-headers.js";
+export { appKey, assertAppKey } from "./app-key.js";
 export { loadRoutes, loadMiddleware, loadConfig } from "./loader.js";
 export { hooks, HOOKS } from "../hooks/index.js";
 export { getEnvironment, isCloud, isSelfHosted, getVersion } from "./environment.js";

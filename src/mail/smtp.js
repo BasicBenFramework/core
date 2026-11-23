@@ -18,7 +18,7 @@
 
 import { createConnection } from 'node:net'
 import { connect as tlsConnect } from 'node:tls'
-import { buildMessage, extractAddresses, extractAddress } from './message.js'
+import { buildMessage, extractAddresses, extractAddress, assertEnvelopeAddress } from './message.js'
 
 /**
  * Create an SMTP transport.
@@ -89,10 +89,14 @@ export function smtpTransport(options = {}) {
         await authenticate(session, capabilities, user, pass)
       }
 
+      // extractAddress already refused these; checked again at the point of
+      // use so no future path into the envelope can skip it.
+      assertEnvelopeAddress(envelopeFrom)
       await session.command(`MAIL FROM:<${envelopeFrom}>`, 250)
 
       const accepted = []
       for (const recipient of recipients) {
+        assertEnvelopeAddress(recipient)
         await session.command(`RCPT TO:<${recipient}>`, 250)
         accepted.push(recipient)
       }

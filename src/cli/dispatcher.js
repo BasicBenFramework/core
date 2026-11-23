@@ -62,12 +62,12 @@ export const commandMeta = {
     }
   },
   test: {
-    description: 'Run tests with Vitest',
-    usage: 'basicben test [files]',
+    description: 'Run tests with node --test',
+    usage: 'basicben test [files or globs]',
     options: {
       '--watch, -w': 'Watch mode (re-run on changes)',
       '--coverage': 'Generate coverage report',
-      '--ui': 'Open Vitest UI'
+      '--<flag>': 'Any other flag is passed to node --test'
     }
   },
 

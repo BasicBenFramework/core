@@ -154,6 +154,29 @@ describe('QueryBuilder', () => {
       assert.strictEqual(result.perPage, 2)
       assert.strictEqual(result.totalPages, 2)
     })
+
+    test('paginate() coerces junk input instead of emitting LIMIT NaN', async () => {
+      for (const [page, perPage] of [['abc', 'xyz'], [NaN, NaN], [-5, 0], [undefined, null], ['2.7', '1e400']]) {
+        const result = await new QueryBuilder(db, 'users').orderBy('id').paginate(page, perPage)
+        assert.ok(Number.isInteger(result.page) && result.page >= 1, `page from ${page}`)
+        assert.ok(Number.isInteger(result.perPage) && result.perPage >= 1, `perPage from ${perPage}`)
+        assert.ok(Array.isArray(result.data))
+      }
+    })
+
+    test('paginate() caps perPage', async () => {
+      const capped = await new QueryBuilder(db, 'users').paginate(1, 1_000_000)
+      assert.strictEqual(capped.perPage, 100)
+
+      const custom = await new QueryBuilder(db, 'users').paginate(1, 1_000_000, { maxPerPage: 2 })
+      assert.strictEqual(custom.perPage, 2)
+      assert.strictEqual(custom.data.length, 2)
+    })
+
+    test('count() is a number even when the driver returns a string', async () => {
+      const stringy = { get: async () => ({ count: '42' }) }
+      assert.strictEqual(await new QueryBuilder(stringy, 'users').count(), 42)
+    })
   })
 
   describe('INSERT queries', () => {

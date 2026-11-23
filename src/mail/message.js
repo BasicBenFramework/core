@@ -103,12 +103,40 @@ export function extractAddresses(value) {
 /**
  * Pull the address out of a possibly-decorated string.
  *
+ * The result goes into `MAIL FROM:<…>` and `RCPT TO:<…>` verbatim, so it is
+ * refused outright if it contains a line break, an angle bracket, whitespace or
+ * any other control character. Headers have encodeHeader to neutralise CRLF;
+ * the envelope has nothing, and `a@b.com>\r\nRCPT TO:<victim@x.com` taken
+ * from a form field would otherwise add a recipient of the sender's choosing —
+ * or end the command stream and start a message of their own.
+ *
  * @param {string} value
  * @returns {string}
+ * @throws {Error} when the address contains characters no address can
  */
 export function extractAddress(value) {
+  // A line break anywhere — display name included — is never part of a real
+  // address, and is refused before deciding which part is the address.
+  if (/[\r\n\0]/.test(String(value))) {
+    throw new Error(`Invalid email address: ${JSON.stringify(String(value)).slice(0, 80)}`)
+  }
+
   const match = String(value).match(/<([^>]+)>/)
-  return (match ? match[1] : String(value)).trim()
+  const address = (match ? match[1] : String(value)).trim()
+  assertEnvelopeAddress(address)
+  return address
+}
+
+/**
+ * Throw unless an address is safe to place in an SMTP envelope command.
+ *
+ * @param {string} address
+ * @throws {Error}
+ */
+export function assertEnvelopeAddress(address) {
+  if (typeof address !== 'string' || address === '' || /[\s<>\x00-\x1f\x7f]/.test(address)) {
+    throw new Error(`Invalid email address: ${JSON.stringify(String(address)).slice(0, 80)}`)
+  }
 }
 
 function toList(value) {

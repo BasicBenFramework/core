@@ -9,7 +9,16 @@
  * - close()              → close connection
  */
 /**
- * Get or create database connection
+ * Get or create database connection.
+ *
+ * The *promise* is cached, not the adapter. Caching the adapter only once it
+ * existed meant every caller arriving during the first connect — every request
+ * in the first moments after a cold start — saw nothing cached and opened its
+ * own connection (a pool each, on Postgres), all but one of them leaked. A
+ * failed connect clears the cache so the next call can try again rather than
+ * replaying the same rejection forever.
+ *
+ * @returns {Promise<Object>}
  */
 export function getDb(): Promise<any>;
 /**

@@ -365,3 +365,56 @@ describe('escapeHtml and stripTags', () => {
     assert.equal(stripTags('<p>a &amp; b</p>'), 'a & b')
   })
 })
+
+describe('links that open a new context', () => {
+  test('target forces noopener noreferrer even when rel is given', () => {
+    const out = sanitizeHtml('<a href="https://x.com" target="_blank" rel="nofollow">x</a>')
+    assert.match(out, /rel="nofollow noopener noreferrer"/)
+  })
+
+  test('rel="opener" is dropped when there is a target', () => {
+    const out = sanitizeHtml('<a href="https://x.com" target="_blank" rel="opener">x</a>')
+    assert.match(out, /rel="noopener noreferrer"/)
+    assert.ok(!/rel="(?:[^"]* )?opener[ "]/.test(out), out)
+  })
+
+  test('without a target, rel is kept as written', () => {
+    assert.match(sanitizeHtml('<a href="/x" rel="nofollow">x</a>'), /rel="nofollow"/)
+  })
+})
+
+describe('ids and names are namespaced', () => {
+  test('id and name get the user-content- prefix', () => {
+    const out = sanitizeHtml('<a id="config" name="getElementById" href="/x">x</a>')
+    assert.match(out, /id="user-content-config"/)
+    assert.match(out, /name="user-content-getElementById"/)
+  })
+
+  test('an id already carrying the prefix is not prefixed again', () => {
+    const once = sanitizeHtml('<h2 id="intro">x</h2>')
+    assert.equal(sanitizeHtml(once), once)
+  })
+
+  test('in-page links follow ids in the same content', () => {
+    const out = sanitizeHtml('<a href="#intro">a</a><a href="#elsewhere">b</a><h2 id="intro">x</h2>')
+    assert.match(out, /href="#user-content-intro"/)
+    assert.match(out, /href="#elsewhere"/)
+  })
+
+  test('the prefix can be disabled', () => {
+    assert.match(sanitizeHtml('<h2 id="intro">x</h2>', { idPrefix: '' }), /id="intro"/)
+  })
+})
+
+describe('input', () => {
+  test('only a disabled checkbox survives', () => {
+    assert.equal(sanitizeHtml('<input type="checkbox" checked>'), '<input type="checkbox" checked="" disabled="">')
+    assert.equal(sanitizeHtml('<input type="checkbox">'), '<input type="checkbox" disabled="">')
+  })
+
+  test('any other input is removed', () => {
+    for (const html of ['<input type="password" name="p">', '<input>', '<input type="text" value="x">', '<input type="image" src="/x">']) {
+      assert.equal(sanitizeHtml(html), '', html)
+    }
+  })
+})

@@ -190,11 +190,21 @@ export class QueryBuilder {
     /**
      * Paginate results.
      *
-     * @param {number} page - Page number (1-indexed)
-     * @param {number} perPage - Items per page
+     * Both arguments usually come straight from a query string, so they are
+     * coerced rather than trusted: anything that is not a positive integer
+     * becomes the default, and `perPage` is capped. `parseInt('abc')` used to
+     * reach the SQL as `LIMIT NaN` — a 500 — and `?perPage=1000000` read the
+     * whole table in one request.
+     *
+     * @param {number|string} [page] - Page number (1-indexed); default 1
+     * @param {number|string} [perPage] - Items per page; default 15, at most `maxPerPage`
+     * @param {Object} [options]
+     * @param {number} [options.maxPerPage] - default 100
      * @returns {Promise<{ data: Array, total: number, page: number, perPage: number, totalPages: number }>}
      */
-    paginate(page?: number, perPage?: number): Promise<{
+    paginate(page?: number | string, perPage?: number | string, options?: {
+        maxPerPage?: number;
+    }): Promise<{
         data: any[];
         total: number;
         page: number;

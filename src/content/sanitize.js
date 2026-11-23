@@ -67,6 +67,18 @@ const VOID_ELEMENTS = new Set([
 /** Attributes whose value is a URL, and so needs its scheme checked. */
 const URL_ATTRIBUTES = new Set(['href', 'src', 'srcset', 'action', 'formaction', 'poster', 'cite', 'background'])
 
+/**
+ * Prefix given to every `id` and `name` in sanitized output.
+ *
+ * Content that can name elements can clobber the page around it: an
+ * `<a id="config">` becomes `window.config`, and `<img name="getElementById">`
+ * shadows a `document` method — DOM clobbering, which turns "harmless" markup
+ * into a way to steer the page's own scripts. Namespacing every id keeps the
+ * content's names out of the page's. GitHub uses the same prefix for the same
+ * reason.
+ */
+export const DEFAULT_ID_PREFIX = 'user-content-'
+
 /** Schemes permitted in a URL attribute. */
 export const DEFAULT_ALLOWED_SCHEMES = ['http', 'https', 'mailto', 'tel', 'ftp']
 
@@ -261,6 +273,9 @@ export function stripTags(html) {
  * @param {Object} [options.allowed] - tag → permitted attributes
  * @param {string[]} [options.schemes] - permitted URL schemes
  * @param {boolean} [options.allowDataImages] - permit `data:image/...` in `src`
+ * @param {string} [options.idPrefix] - prepended to `id`/`name` values not
+ *   already carrying it; defaults to `user-content-`, `''` disables. In-page
+ *   links (`href="#x"`) to an id in the same fragment are rewritten to match.
  * @returns {string}
  */
 export function sanitizeHtml(html, options = {}) {
@@ -268,6 +283,7 @@ export function sanitizeHtml(html, options = {}) {
 
   const allowed = options.allowed || DEFAULT_ALLOWED
   const schemes = options.schemes || DEFAULT_ALLOWED_SCHEMES
+  const state = { idPrefix: options.idPrefix ?? DEFAULT_ID_PREFIX, ids: new Set() }
 
   // NUL is dropped by HTML parsers, so leaving it in lets "<scr\0ipt" reach the
   // browser as a script tag after having sailed past a tag-name comparison.
@@ -326,7 +342,19 @@ export function sanitizeHtml(html, options = {}) {
 
     if (!allowed[name]) continue
 
-    const attrs = filterAttributes(parsed.attrs, allowed[name], name, schemes, options)
+    // A form control in content is a phishing kit waiting to happen. The one
+    // input with a legitimate use is a task-list checkbox, and that is all
+    // that survives — always disabled, so it displays state and collects none.
+    if (name === 'input') {
+      const type = parsed.attrs.find(([attr]) => attr === 'type')
+      if (!type || decodeEntities(type[1]).trim().toLowerCase() !== 'checkbox') continue
+
+      const checked = parsed.attrs.some(([attr]) => attr === 'checked')
+      out += `<input type="checkbox"${checked ? ' checked=""' : ''} disabled="">`
+      continue
+    }
+
+    const attrs = filterAttributes(parsed.attrs, allowed[name], name, schemes, options, state)
 
     if (VOID_ELEMENTS.has(name)) {
       out += `<${name}${attrs}>`
@@ -339,7 +367,30 @@ export function sanitizeHtml(html, options = {}) {
 
   while (stack.length) out += `</${stack.pop()}>`
 
-  return out
+  return prefixFragmentLinks(out, state.ids, state.idPrefix)
+}
+
+/**
+ * Point in-page links at the prefixed ids.
+ *
+ * Once `id="intro"` has become `id="user-content-intro"`, a `href="#intro"` in
+ * the same content would go nowhere. Only fragments naming an id that is
+ * actually in this output are rewritten — a link to `#comments` elsewhere on
+ * the page is left alone. Runs over markup this module (or the Markdown
+ * renderer) just produced, whose attributes are always double-quoted and
+ * escaped, which is what makes a pattern match reliable here.
+ *
+ * @param {string} html
+ * @param {Set<string>} ids - prefixed ids present, as they appear in the markup
+ * @param {string} prefix
+ * @returns {string}
+ */
+export function prefixFragmentLinks(html, ids, prefix) {
+  if (!prefix || ids.size === 0) return html
+
+  return html.replace(/ href="#([^"]*)"/g, (whole, fragment) =>
+    !fragment.startsWith(prefix) && ids.has(prefix + fragment) ? ` href="#${prefix}${fragment}"` : whole
+  )
 }
 
 /**
@@ -445,8 +496,10 @@ function skipElement(source, from, name) {
 }
 
 /** Keep only allowed attributes, and only when their value is acceptable. */
-function filterAttributes(attrs, permitted, tag, schemes, options) {
+function filterAttributes(attrs, permitted, tag, schemes, options, state) {
   let out = ''
+  let rel = null
+  let hasTarget = false
 
   for (const [name, rawValue] of attrs) {
     // Anything starting `on` is an event handler. This is belt-and-braces —
@@ -473,13 +526,37 @@ function filterAttributes(attrs, permitted, tag, schemes, options) {
     // allowed.
     if (name === 'style') continue
 
+    if (name === 'id' || name === 'name') {
+      if (value === '') continue
+      const named = state.idPrefix && !value.startsWith(state.idPrefix) ? state.idPrefix + value : value
+      state.ids.add(escapeAttr(named))
+      out += ` ${name}="${escapeAttr(named)}"`
+      continue
+    }
+
+    // rel is assembled after the loop, once it is known whether there is a target.
+    if (tag === 'a' && name === 'rel') { rel = value; continue }
+    if (tag === 'a' && name === 'target') hasTarget = true
+
     out += ` ${name}="${escapeAttr(value)}"`
   }
 
-  // Links that leave the site get noopener: without it the opened page can
-  // reach back through window.opener and navigate this one.
-  if (tag === 'a' && /\starget=/.test(out) && !/\srel=/.test(out)) {
-    out += ' rel="noopener noreferrer"'
+  if (tag === 'a' && (rel !== null || hasTarget)) {
+    let tokens = (rel || '').split(/\s+/).filter(Boolean).map((token) => token.toLowerCase())
+
+    // A link opening a new browsing context gets noopener and noreferrer
+    // whatever rel said: without them the opened page can reach back through
+    // window.opener and navigate this one. Content-supplied rel="opener"
+    // asks for exactly that, so it is dropped rather than honoured.
+    if (hasTarget) {
+      tokens = tokens.filter((token) => token !== 'opener')
+      for (const required of ['noopener', 'noreferrer']) {
+        if (!tokens.includes(required)) tokens.push(required)
+      }
+    }
+
+    tokens = [...new Set(tokens)]
+    if (tokens.length) out += ` rel="${escapeAttr(tokens.join(' '))}"`
   }
 
   return out

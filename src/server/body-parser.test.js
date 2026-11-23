@@ -63,7 +63,8 @@ describe('bodyParser', () => {
     })
     await run(bodyParser(), req)
 
-    assert.deepStrictEqual(req.body, { a: '1', b: '2' })
+    // Spread: the parsed body has a null prototype (see parseUrlEncoded).
+    assert.deepStrictEqual({ ...req.body }, { a: '1', b: '2' })
   })
 
   test('skips GET without reading', async () => {
@@ -132,5 +133,26 @@ describe('json skip', () => {
 
     assert.strictEqual(req.wasRead, false)
     assert.strictEqual(req.body, undefined)
+  })
+})
+
+describe('urlencoded keys', () => {
+  test('__proto__, constructor and prototype are ignored, not a 500', async () => {
+    const { parseUrlEncoded } = await import('./body-parser.js')
+    const body = parseUrlEncoded('__proto__[]=x&__proto__=y&constructor[]=z&prototype=p&name=ok')
+
+    assert.strictEqual(Object.getPrototypeOf(body), null)
+    assert.deepStrictEqual(Object.keys(body), ['name'])
+    assert.strictEqual(({}).x, undefined, 'Object.prototype is untouched')
+  })
+
+  test('a scalar followed by array notation keeps both values', async () => {
+    const { parseUrlEncoded } = await import('./body-parser.js')
+    assert.deepStrictEqual({ ...parseUrlEncoded('a=1&a[]=2&a[]=3') }, { a: ['1', '2', '3'] })
+  })
+
+  test('hasOwnProperty-named fields are just fields', async () => {
+    const { parseUrlEncoded } = await import('./body-parser.js')
+    assert.strictEqual(parseUrlEncoded('hasOwnProperty=1').hasOwnProperty, '1')
   })
 })

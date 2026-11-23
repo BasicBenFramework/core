@@ -6,7 +6,8 @@
 import { loadConfig } from '../server/loader.js'
 import { QueryBuilder } from './QueryBuilder.js'
 
-let dbInstance = null
+/** @type {Promise<Object>|null} */
+let dbPromise = null
 
 /**
  * Database adapter interface:
@@ -20,13 +21,29 @@ let dbInstance = null
  */
 
 /**
- * Get or create database connection
+ * Get or create database connection.
+ *
+ * The *promise* is cached, not the adapter. Caching the adapter only once it
+ * existed meant every caller arriving during the first connect — every request
+ * in the first moments after a cold start — saw nothing cached and opened its
+ * own connection (a pool each, on Postgres), all but one of them leaked. A
+ * failed connect clears the cache so the next call can try again rather than
+ * replaying the same rejection forever.
+ *
+ * @returns {Promise<Object>}
  */
-export async function getDb() {
-  if (dbInstance) {
-    return dbInstance
+export function getDb() {
+  if (!dbPromise) {
+    dbPromise = connect().catch((error) => {
+      dbPromise = null
+      throw error
+    })
   }
 
+  return dbPromise
+}
+
+async function connect() {
   const config = await loadConfig()
   const dbConfig = config.db || {}
 
@@ -35,22 +52,19 @@ export async function getDb() {
   switch (driver) {
     case 'sqlite': {
       const { createSqliteAdapter } = await import('./adapters/sqlite.js')
-      dbInstance = await createSqliteAdapter(resolveUrl(dbConfig, 'sqlite'), dbConfig)
-      break
+      return createSqliteAdapter(resolveUrl(dbConfig, 'sqlite'), dbConfig)
     }
 
     case 'postgres':
     case 'pg': {
       const { createPostgresAdapter } = await import('./adapters/postgres.js')
-      dbInstance = await createPostgresAdapter(resolveUrl(dbConfig, 'postgres'), dbConfig)
-      break
+      return createPostgresAdapter(resolveUrl(dbConfig, 'postgres'), dbConfig)
     }
 
     case 'turso':
     case 'libsql': {
       const { createTursoAdapter } = await import('./adapters/turso.js')
-      dbInstance = await createTursoAdapter(resolveUrl(dbConfig, 'turso'), dbConfig)
-      break
+      return createTursoAdapter(resolveUrl(dbConfig, 'turso'), dbConfig)
     }
 
     default:
@@ -59,8 +73,6 @@ export async function getDb() {
         'Supported drivers: sqlite, postgres, turso'
       )
   }
-
-  return dbInstance
 }
 
 /**
@@ -139,10 +151,12 @@ export const db = {
   },
 
   async close() {
-    if (dbInstance) {
-      await dbInstance.close()
-      dbInstance = null
-    }
+    const pending = dbPromise
+    dbPromise = null
+    if (!pending) return
+
+    const conn = await pending.catch(() => null)
+    if (conn) await conn.close()
   },
 
   /**
@@ -162,7 +176,7 @@ export const db = {
  * Reset connection (for testing)
  */
 export function resetDb() {
-  dbInstance = null
+  dbPromise = null
 }
 
 /**

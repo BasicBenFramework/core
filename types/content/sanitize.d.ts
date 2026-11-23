@@ -53,13 +53,33 @@ export function stripTags(html: string): string;
  * @param {Object} [options.allowed] - tag → permitted attributes
  * @param {string[]} [options.schemes] - permitted URL schemes
  * @param {boolean} [options.allowDataImages] - permit `data:image/...` in `src`
+ * @param {string} [options.idPrefix] - prepended to `id`/`name` values not
+ *   already carrying it; defaults to `user-content-`, `''` disables. In-page
+ *   links (`href="#x"`) to an id in the same fragment are rewritten to match.
  * @returns {string}
  */
 export function sanitizeHtml(html: string, options?: {
     allowed?: any;
     schemes?: string[];
     allowDataImages?: boolean;
+    idPrefix?: string;
 }): string;
+/**
+ * Point in-page links at the prefixed ids.
+ *
+ * Once `id="intro"` has become `id="user-content-intro"`, a `href="#intro"` in
+ * the same content would go nowhere. Only fragments naming an id that is
+ * actually in this output are rewritten — a link to `#comments` elsewhere on
+ * the page is left alone. Runs over markup this module (or the Markdown
+ * renderer) just produced, whose attributes are always double-quoted and
+ * escaped, which is what makes a pattern match reliable here.
+ *
+ * @param {string} html
+ * @param {Set<string>} ids - prefixed ids present, as they appear in the markup
+ * @param {string} prefix
+ * @returns {string}
+ */
+export function prefixFragmentLinks(html: string, ids: Set<string>, prefix: string): string;
 export namespace DEFAULT_ALLOWED {
     let p: any[];
     let br: any[];
@@ -100,5 +120,16 @@ export namespace DEFAULT_ALLOWED {
     let div: string[];
     let input: string[];
 }
+/**
+ * Prefix given to every `id` and `name` in sanitized output.
+ *
+ * Content that can name elements can clobber the page around it: an
+ * `<a id="config">` becomes `window.config`, and `<img name="getElementById">`
+ * shadows a `document` method — DOM clobbering, which turns "harmless" markup
+ * into a way to steer the page's own scripts. Namespacing every id keeps the
+ * content's names out of the page's. GitHub uses the same prefix for the same
+ * reason.
+ */
+export const DEFAULT_ID_PREFIX: "user-content-";
 /** Schemes permitted in a URL attribute. */
 export const DEFAULT_ALLOWED_SCHEMES: string[];

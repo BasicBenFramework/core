@@ -13,6 +13,8 @@
  * duration, since that is the only thing tying BEGIN and COMMIT together.
  */
 
+import { serialQueue, withSavepoint } from './transaction.js'
+
 const PIPELINE_PATH = '/v3/pipeline'
 
 /**
@@ -170,56 +172,82 @@ export async function createTursoAdapter(url, options = {}) {
       baton = begin.baton
 
       // Statements inside the transaction reuse the baton and must be
-      // serialized — libSQL rejects overlapping requests on one stream.
-      const sendInTx = async (sql, params, wantRows) => {
+      // serialized — libSQL rejects overlapping requests on one stream, and
+      // each response hands back the baton the next request must carry. The
+      // comment used to say so while nothing enforced it: two statements from
+      // a `Promise.all` inside the callback both sent the same baton, and the
+      // second failed (or, worse, the stream was lost and the COMMIT with it).
+      const serial = serialQueue()
+
+      const sendInTx = (sql, params, wantRows) => serial(async () => {
         const { results, baton: next } = await pipeline(
           [{ type: 'execute', stmt: buildStmt(sql, params, wantRows) }],
           baton
         )
         baton = next
         return results[0].response.result
-      }
+      })
+
+      const execInTx = (sql) => serial(async () => {
+        const { baton: next } = await pipeline([{ type: 'sequence', sql }], baton)
+        baton = next
+      })
 
       // `surface` covers run/get/all. The other two live on the connection
       // object, so a transaction-scoped adapter built from `surface` alone is
       // missing them — which went unnoticed until migrations started running
       // inside a transaction and every `db.exec` in one threw
       // "db.exec is not a function".
-      const tx = {
-        ...surface(sendInTx),
+      const makeTx = (depth) => {
+        const nested = serialQueue()
 
-        /**
-         * Multi-statement script, on this transaction's stream.
-         *
-         * The connection-level `exec` sends a `close` alongside the sequence;
-         * doing that here would end the stream the transaction lives on, and
-         * the COMMIT would have nowhere to go.
-         */
-        async exec(sql) {
-          const { baton: next } = await pipeline([{ type: 'sequence', sql }], baton)
-          baton = next
-        },
+        const tx = {
+          ...surface(sendInTx),
 
-        /** Joins the open transaction rather than starting a second one. */
-        async transaction(inner) {
-          return inner(tx)
+          /**
+           * Multi-statement script, on this transaction's stream.
+           *
+           * The connection-level `exec` sends a `close` alongside the sequence;
+           * doing that here would end the stream the transaction lives on, and
+           * the COMMIT would have nowhere to go.
+           */
+          exec: execInTx,
+
+          /**
+           * A nested transaction is a SAVEPOINT on this stream, so its failure
+           * undoes only its own work. Nested calls at one level are queued,
+           * since savepoints cannot interleave.
+           */
+          async transaction(inner) {
+            const child = makeTx(depth + 1)
+            return nested(() => withSavepoint(
+              (statement) => sendInTx(statement, [], false),
+              `bb_savepoint_${depth + 1}`,
+              () => inner(child)
+            ))
+          }
         }
+
+        return tx
       }
+
+      const tx = makeTx(0)
 
       try {
         const result = await fn(tx)
-        await pipeline(
+        // Queued, so a statement still in flight cannot race the COMMIT.
+        await serial(() => pipeline(
           [{ type: 'execute', stmt: buildStmt('COMMIT', [], false) }, { type: 'close' }],
           baton
-        )
+        ))
         return result
       } catch (error) {
         // A rollback failure must not mask the error that caused it.
         try {
-          await pipeline(
+          await serial(() => pipeline(
             [{ type: 'execute', stmt: buildStmt('ROLLBACK', [], false) }, { type: 'close' }],
             baton
-          )
+          ))
         } catch {
           // ignore
         }

@@ -7,6 +7,7 @@
  * @param {string[]} [options.schemes] - URL schemes permitted in links
  * @param {Object} [options.allowed] - sanitizer allowlist override
  * @param {boolean} [options.headingIds] - add ids to headings (default true)
+ * @param {string} [options.idPrefix] - prefix for ids in the output (default `user-content-`, `''` for none)
  * @param {boolean} [options.filter] - run the `content.render` hook (default true)
  * @returns {Promise<string>} sanitized HTML
  */
@@ -15,6 +16,7 @@ export function renderContent(source: string, options?: {
     schemes?: string[];
     allowed?: any;
     headingIds?: boolean;
+    idPrefix?: string;
     filter?: boolean;
 }): Promise<string>;
 /**
@@ -51,17 +53,23 @@ export function slugify(text: string): string;
 /**
  * Read the headings out of a document, for a table of contents.
  *
- * Uses the same slug function the renderer does, so the returned ids match the
- * anchors actually present in the HTML.
+ * Uses the same slug function and id prefix the renderer does, so the returned
+ * ids match the anchors actually present in the HTML (`user-content-…` by
+ * default).
  *
  * @param {string} source - Markdown
  * @param {Object} [options]
+ * @param {(text: string) => string} [options.slugify]
+ * @param {string} [options.idPrefix] - defaults to `user-content-`, as in the renderer
  * @returns {Array<{level: number, text: string, id: string}>}
  */
-export function headings(source: string, options?: any): Array<{
+export function headings(source: string, options?: {
+    slugify?: (text: string) => string;
+    idPrefix?: string;
+}): Array<{
     level: number;
     text: string;
     id: string;
 }>;
 export { renderMarkdown } from "./markdown.js";
-export { sanitizeHtml, stripTags, escapeHtml, decodeEntities, isSafeUrl, DEFAULT_ALLOWED, DEFAULT_ALLOWED_SCHEMES } from "./sanitize.js";
+export { sanitizeHtml, stripTags, escapeHtml, decodeEntities, isSafeUrl, DEFAULT_ALLOWED, DEFAULT_ALLOWED_SCHEMES, DEFAULT_ID_PREFIX } from "./sanitize.js";

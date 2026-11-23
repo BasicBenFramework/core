@@ -13,7 +13,7 @@ import { buildMessage, extractAddresses } from './message.js'
 import { smtpTransport, resendTransport } from './smtp.js'
 
 export { smtpTransport, resendTransport }
-export { buildMessage, extractAddresses, extractAddress, encodeHeader } from './message.js'
+export { buildMessage, extractAddresses, extractAddress, assertEnvelopeAddress, encodeHeader } from './message.js'
 export { renderMail } from './render.js'
 
 let cached = null

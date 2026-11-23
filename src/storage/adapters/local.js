@@ -16,6 +16,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { mkdir, writeFile, readFile, unlink, stat, readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join, dirname, resolve, sep } from 'node:path'
+import { appKey } from '../../server/app-key.js'
 
 /**
  * @param {Object} config
@@ -27,7 +28,9 @@ import { join, dirname, resolve, sep } from 'node:path'
 export function createLocalAdapter(config = {}) {
   const root = resolve(process.cwd(), config.dir || 'public/uploads')
   const baseUrl = (config.baseUrl || '/uploads').replace(/\/$/, '')
-  const secret = config.secret || process.env.APP_KEY || 'basicben-local-storage'
+  // No literal fallback: a default key that ships in the package is a key
+  // every deployment shares. See server/app-key.js.
+  const secret = config.secret || appKey('local storage URLs')
 
   /**
    * Resolve a key to a path inside the storage root.
@@ -49,8 +52,17 @@ export function createLocalAdapter(config = {}) {
     return full
   }
 
-  const sign = (key, method, expires) =>
-    createHmac('sha256', secret).update(`${method}\n${key}\n${expires}`).digest('hex')
+  // The content type is part of the signed material when one was given, so a
+  // URL issued for an image/png PUT refuses a body declared as anything else —
+  // the same guarantee the S3 driver gets from SigV4 signing Content-Type. URLs
+  // signed without a type keep the original three-line material, so they still
+  // verify.
+  const sign = (key, method, expires, contentType = '') => {
+    const material = contentType
+      ? `${method}\n${key}\n${expires}\n${contentType}`
+      : `${method}\n${key}\n${expires}`
+    return createHmac('sha256', secret).update(material).digest('hex')
+  }
 
   return {
     driver: 'local',
@@ -158,11 +170,14 @@ export function createLocalAdapter(config = {}) {
      *
      * @param {string} key
      * @param {Object} [options]
+     * @param {string} [options.method]
+     * @param {number} [options.expiresIn] - seconds
+     * @param {string} [options.contentType] - when given, the PUT must declare exactly this type
      * @returns {string}
      */
-    signedUrl(key, { method = 'GET', expiresIn = 900 } = {}) {
+    signedUrl(key, { method = 'GET', expiresIn = 900, contentType } = {}) {
       const expires = Math.floor(Date.now() / 1000) + expiresIn
-      const signature = sign(key, method.toUpperCase(), expires)
+      const signature = sign(key, method.toUpperCase(), expires, normalizeType(contentType))
       const encoded = String(key).split('/').map(encodeURIComponent).join('/')
 
       return `${baseUrl}/${encoded}?expires=${expires}&signature=${signature}`
@@ -171,24 +186,37 @@ export function createLocalAdapter(config = {}) {
     /**
      * Check a signature produced by `signedUrl`.
      *
+     * `contentType` is the type the request declares. A URL signed with a type
+     * verifies only against that type; one signed without a type verifies
+     * whatever is declared, as before.
+     *
      * @param {string} key
      * @param {Object} params
+     * @param {string} [params.method]
+     * @param {string|number} [params.expires]
+     * @param {string} [params.signature]
+     * @param {string} [params.contentType]
      * @returns {{ valid: boolean, reason?: string }}
      */
-    verifySignedUrl(key, { method = 'GET', expires, signature } = {}) {
+    verifySignedUrl(key, { method = 'GET', expires, signature, contentType } = {}) {
       if (!expires || !signature) return { valid: false, reason: 'missing' }
       if (Number(expires) < Math.floor(Date.now() / 1000)) return { valid: false, reason: 'expired' }
 
-      const expected = sign(key, String(method).toUpperCase(), String(expires))
+      const upper = String(method).toUpperCase()
+      const provided = Buffer.from(String(signature), 'hex')
 
       // Compared in constant time: a fast reject leaks how much of a guess was
       // correct, which is enough to recover a signature byte by byte.
-      const a = Buffer.from(expected, 'hex')
-      const b = Buffer.from(String(signature), 'hex')
-
-      if (a.length !== b.length || !timingSafeEqual(a, b)) {
-        return { valid: false, reason: 'signature' }
+      const matches = (expected) => {
+        const a = Buffer.from(expected, 'hex')
+        return a.length === provided.length && timingSafeEqual(a, provided)
       }
+
+      const declared = normalizeType(contentType)
+      const ok = (declared && matches(sign(key, upper, String(expires), declared))) ||
+        matches(sign(key, upper, String(expires)))
+
+      if (!ok) return { valid: false, reason: 'signature' }
 
       return { valid: true }
     },
@@ -208,6 +236,10 @@ const CONTENT_TYPES = {
   zip: 'application/zip', mp4: 'video/mp4', webm: 'video/webm',
   mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg',
   woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf'
+}
+
+function normalizeType(contentType) {
+  return contentType ? String(contentType).split(';')[0].trim().toLowerCase() : ''
 }
 
 function contentTypeFor(key) {

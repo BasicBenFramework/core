@@ -1,4 +1,17 @@
 /**
+ * The filename an upload is stored under: the client's name, with the
+ * extension replaced by the one belonging to the validated content type.
+ *
+ * A custom allowed type with no canonical extension keeps the client's
+ * extension only when it is not one a browser would render or run; otherwise
+ * it becomes `.bin`, which every server hands out as an opaque download.
+ *
+ * @param {string} filename - as the client sent it
+ * @param {string} contentType - the validated, parameter-free type
+ * @returns {string}
+ */
+export function storedFilename(filename: string, contentType: string): string;
+/**
  * Validate an upload before signing anything.
  *
  * This is the enforcement point: a caller with no signed URL cannot upload at

@@ -49,7 +49,7 @@ export function createLimiter({ limit, window, store, blockFor, now: clock }?: L
  *
  * @param {(LimiterOptions | { limiter: Limiter }) & {
  *   key?: (req: any) => string|null|undefined,
- *   trustProxy?: boolean,
+ *   trustProxy?: boolean|number,
  *   onLimited?: (req: any, res: any, info: RateLimitResult) => void,
  *   headers?: boolean,
  *   message?: string
@@ -61,7 +61,7 @@ export function rateLimit(options?: (LimiterOptions | {
     limiter: Limiter;
 }) & {
     key?: (req: any) => string | null | undefined;
-    trustProxy?: boolean;
+    trustProxy?: boolean | number;
     onLimited?: (req: any, res: any, info: RateLimitResult) => void;
     headers?: boolean;
     message?: string;
@@ -77,11 +77,34 @@ export function rateLimit(options?: (LimiterOptions | {
  * directly-exposed server lets anyone rotate their apparent address and bypass
  * every limit here. Behind a proxy that overwrites the header, set it.
  *
+ * Even then only the entries the proxies appended can be believed. Each proxy
+ * appends the address it received the request from, so the client's address
+ * is the one *your* proxies added — counted from the right. The left-most
+ * entry is whatever the client sent, which is why reading it (as this once
+ * did) made trustProxy a bypass rather than a fix.
+ *
+ * - `trustProxy: true` — one proxy in front (the common case): the right-most entry.
+ * - `trustProxy: n` — n proxies in front: the n-th entry from the right. A
+ *   shorter header yields its left-most entry, as Express does.
+ *
+ * The result is normalised so one client cannot hold many keys: an
+ * IPv4-mapped IPv6 address (`::ffff:1.2.3.4`) is reported as the IPv4 address,
+ * and an IPv6 address as its /64 — a single subscriber is routinely handed a
+ * whole /64, and keying on the full address gave them 2⁶⁴ budgets.
+ *
  * @param {Object} req
- * @param {boolean} [trustProxy]
+ * @param {boolean|number} [trustProxy] - `true` = one hop; a number = that many hops
  * @returns {string}
  */
-export function clientAddress(req: any, trustProxy?: boolean): string;
+export function clientAddress(req: any, trustProxy?: boolean | number): string;
+/**
+ * Reduce an address to the key a client is limited under.
+ *
+ * @param {string} address
+ * @returns {string} an IPv4 address, an IPv6 /64 as `xxxx:xxxx:xxxx:xxxx::/64`,
+ *   or the input unchanged when it is not an address at all
+ */
+export function normalizeAddress(address: string): string;
 /**
  * What a limiter reports about one key.
  */

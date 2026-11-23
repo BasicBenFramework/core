@@ -29,6 +29,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { getStorage, buildKey, sanitizeFilename } from './index.js'
 import { hooks, HOOKS } from '../hooks/index.js'
+import { appKey } from '../server/app-key.js'
 
 /** Types accepted by default. */
 export const DEFAULT_ALLOWED_TYPES = [
@@ -54,6 +55,74 @@ const NEVER_ALLOWED = [
 ]
 
 const DEFAULT_MAX_SIZE = 10 * 1024 * 1024
+
+/**
+ * The extension each default type is stored under.
+ *
+ * The key's extension is what decides how the file is served back: the local
+ * driver's static mount picks the MIME type from it, and so does almost every
+ * CDN in front of a bucket. Keeping the extension the client sent meant a file
+ * declared as `image/png` but named `x.html` was stored as `....html` and served
+ * as HTML from the app's own origin — stored XSS, with the content-type check
+ * passing the whole time. So the extension is derived from the type that was
+ * validated, never from the filename.
+ */
+const CANONICAL_EXTENSIONS = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/avif': 'avif',
+  'application/pdf': 'pdf',
+  'text/plain': 'txt',
+  'text/markdown': 'md',
+  'text/csv': 'csv',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'audio/mpeg': 'mp3',
+  'audio/ogg': 'ogg',
+  'audio/wav': 'wav'
+}
+
+/**
+ * Extensions a browser or server may execute or render as a document.
+ *
+ * Only consulted for custom types outside the map above, where there is no
+ * canonical extension and the client's is kept if it is harmless.
+ */
+const DANGEROUS_EXTENSIONS = new Set([
+  'html', 'htm', 'xhtml', 'xht', 'shtml', 'mht', 'mhtml',
+  'svg', 'svgz', 'xml', 'xsl', 'xslt', 'rss', 'atom',
+  'js', 'mjs', 'cjs', 'jsx', 'ts', 'wasm',
+  'php', 'phtml', 'phar', 'asp', 'aspx', 'jsp', 'cgi', 'pl', 'py', 'rb', 'sh',
+  'exe', 'bat', 'cmd', 'com', 'hta', 'swf', 'appcache', 'manifest'
+])
+
+/**
+ * The filename an upload is stored under: the client's name, with the
+ * extension replaced by the one belonging to the validated content type.
+ *
+ * A custom allowed type with no canonical extension keeps the client's
+ * extension only when it is not one a browser would render or run; otherwise
+ * it becomes `.bin`, which every server hands out as an opaque download.
+ *
+ * @param {string} filename - as the client sent it
+ * @param {string} contentType - the validated, parameter-free type
+ * @returns {string}
+ */
+export function storedFilename(filename, contentType) {
+  const safe = sanitizeFilename(filename)
+  const dot = safe.lastIndexOf('.')
+  const stem = (dot > 0 ? safe.slice(0, dot) : safe) || 'file'
+  const given = dot > 0 ? safe.slice(dot + 1) : ''
+
+  const canonical = CANONICAL_EXTENSIONS[String(contentType).toLowerCase()]
+  if (canonical) return `${stem}.${canonical}`
+
+  if (given && !DANGEROUS_EXTENSIONS.has(given)) return `${stem}.${given}`
+
+  return `${stem}.bin`
+}
 
 /**
  * Validate an upload before signing anything.
@@ -139,7 +208,7 @@ export async function signUpload(upload, options = {}) {
   const storage = options.storage || await getStorage()
   const expiresIn = options.expiresIn ?? 900
 
-  const key = buildKey(sanitizeFilename(upload.filename), { prefix: options.prefix })
+  const key = buildKey(storedFilename(upload.filename, check.contentType), { prefix: options.prefix })
 
   // Plugins may rewrite the key or refuse the upload — image pipelines and
   // per-tenant prefixes both want a say before anything is signed.
@@ -289,7 +358,7 @@ export function verifyTicket({ key, userId, ticket, secret }) {
 }
 
 function ticketSignature({ key, userId, expiresAt, secret }) {
-  const material = secret || process.env.APP_KEY || 'basicben-upload-ticket'
+  const material = secret || appKey('upload tickets')
 
   return createHmac('sha256', material)
     .update(`${key}\n${userId ?? ''}\n${expiresAt}`)

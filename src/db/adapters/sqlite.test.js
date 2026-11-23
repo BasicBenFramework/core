@@ -185,3 +185,125 @@ describe('parameter binding', () => {
     db.close()
   })
 })
+
+describe('concurrent transactions', () => {
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+  let db
+
+  before(async () => {
+    db = await createSqliteAdapter(':memory:', { wal: false })
+    db.exec('CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT NOT NULL)')
+  })
+
+  after(() => db.close())
+
+  const names = () => db.all('SELECT name FROM items ORDER BY id').map((row) => row.name)
+  const reset = () => db.exec('DELETE FROM items')
+
+  test("one transaction's rollback does not take a concurrent one with it", async () => {
+    reset()
+
+    // The bleed: A opens, awaits, and fails. B starts while A is open. With a
+    // shared depth counter B "joined" A, and its committed row vanished in
+    // A's rollback.
+    const a = db.transaction(async (tx) => {
+      tx.run('INSERT INTO items (name) VALUES (?)', ['a'])
+      await delay(20)
+      throw new Error('A fails')
+    })
+
+    const b = db.transaction(async (tx) => {
+      tx.run('INSERT INTO items (name) VALUES (?)', ['b'])
+    })
+
+    await assert.rejects(a, /A fails/)
+    await b
+
+    assert.deepStrictEqual(names(), ['b'])
+  })
+
+  test('a plain query during an open transaction is not swallowed by it', async () => {
+    reset()
+
+    const a = db.transaction(async (tx) => {
+      tx.run('INSERT INTO items (name) VALUES (?)', ['in-tx'])
+      await delay(20)
+      throw new Error('rollback')
+    })
+
+    await delay(5)
+
+    // Issued from outside while A is open: it waits rather than running inside A.
+    const outside = db.run('INSERT INTO items (name) VALUES (?)', ['outside'])
+    assert.ok(outside instanceof Promise, 'queued behind the open transaction')
+
+    await assert.rejects(a, /rollback/)
+    await outside
+
+    assert.deepStrictEqual(names(), ['outside'])
+  })
+
+  test('outside any transaction, queries stay synchronous', () => {
+    reset()
+    const result = db.run('INSERT INTO items (name) VALUES (?)', ['sync'])
+    assert.strictEqual(result.changes, 1)
+  })
+
+  test('code inside a transaction using the global adapter joins it instead of deadlocking', async () => {
+    reset()
+
+    await assert.rejects(db.transaction(async () => {
+      db.run('INSERT INTO items (name) VALUES (?)', ['global'])
+      await delay(5)
+      assert.strictEqual(db.get('SELECT COUNT(*) AS n FROM items').n, 1)
+      throw new Error('undo')
+    }), /undo/)
+
+    assert.deepStrictEqual(names(), [])
+  })
+
+  test('a nested transaction is a savepoint: its failure undoes only its own work', async () => {
+    reset()
+
+    await db.transaction(async (tx) => {
+      tx.run('INSERT INTO items (name) VALUES (?)', ['outer'])
+
+      await assert.rejects(tx.transaction(async (inner) => {
+        inner.run('INSERT INTO items (name) VALUES (?)', ['inner'])
+        throw new Error('inner fails')
+      }), /inner fails/)
+
+      await tx.transaction(async (inner) => {
+        inner.run('INSERT INTO items (name) VALUES (?)', ['inner-ok'])
+        // Deeper still, through the global adapter.
+        await db.transaction(async (deeper) => {
+          deeper.run('INSERT INTO items (name) VALUES (?)', ['deeper'])
+        })
+      })
+    })
+
+    assert.deepStrictEqual(names(), ['outer', 'inner-ok', 'deeper'])
+  })
+
+  test('a handle kept past its transaction does not run inside a later one', async () => {
+    reset()
+
+    let kept
+    await db.transaction(async (tx) => { kept = tx })
+
+    const later = db.transaction(async (tx) => {
+      tx.run('INSERT INTO items (name) VALUES (?)', ['later'])
+      await delay(20)
+      throw new Error('later fails')
+    })
+
+    await delay(5)
+    const stale = kept.run('INSERT INTO items (name) VALUES (?)', ['stale'])
+
+    await assert.rejects(later, /later fails/)
+    await stale
+
+    assert.deepStrictEqual(names(), ['stale'])
+    await assert.rejects(kept.transaction(async () => {}), /already finished/)
+  })
+})

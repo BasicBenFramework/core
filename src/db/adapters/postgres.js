@@ -3,6 +3,8 @@
  * Provides async interface matching the SQLite adapter.
  */
 
+import { serialQueue, withSavepoint } from './transaction.js'
+
 let pg = null
 
 /**
@@ -118,15 +120,145 @@ export function poolOptions(url, options = {}) {
 }
 
 /**
+ * Parse an int8 (bigint) column.
+ *
+ * node-postgres returns int8 as a string, because not every int8 fits in a
+ * JavaScript number. In practice the int8s an application sees are COUNT(*),
+ * SUM of integers and BIGSERIAL ids, all of which fit — and as strings they
+ * compare as text (`"9" > "10"`) and concatenate (`"3" + 1`). So a value that
+ * is a safe integer becomes a number; one that is not stays a string rather
+ * than silently losing precision. `numeric` is left as a string, since it is
+ * usually money and a float would round it.
+ *
+ * @param {string|null} value
+ * @returns {number|string|null}
+ */
+export function parseInt8(value) {
+  if (value === null) return null
+  const n = Number(value)
+  return Number.isSafeInteger(n) ? n : value
+}
+
+/** OID of int8 / bigint. */
+const INT8_OID = 20
+
+/**
+ * Type parsers for this adapter's pool: pg's own, with int8 replaced.
+ *
+ * Per pool rather than `pg.types.setTypeParser`, which would change int8 for
+ * every pg client in the process, including ones this adapter does not own.
+ *
+ * @param {{ getTypeParser: Function }} base - `pg.types`
+ * @returns {{ getTypeParser: (oid: number, format?: string) => Function }}
+ */
+export function pgTypes(base) {
+  return {
+    getTypeParser(oid, format) {
+      if (oid === INT8_OID && format !== 'binary') return parseInt8
+      return base.getTypeParser(oid, format)
+    }
+  }
+}
+
+/**
+ * Run `fn` in a transaction on a client checked out of `pool`.
+ *
+ * - Nested `tx.transaction()` calls are SAVEPOINTs, so a nested failure the
+ *   caller catches undoes only the nested work instead of leaving the whole
+ *   transaction in Postgres's "current transaction is aborted" state.
+ * - A failed ROLLBACK no longer replaces the error that caused it — that was
+ *   the error anyone debugging needed — and the client is released *with* the
+ *   failure, so the pool destroys it instead of handing a connection in an
+ *   unknown transaction state to the next request.
+ *
+ * @param {{ connect: () => Promise<any> }} pool
+ * @param {(tx: Object) => any} fn
+ * @returns {Promise<any>}
+ */
+export async function runTransaction(pool, fn) {
+  const client = await pool.connect()
+  let releaseError
+
+  try {
+    await client.query('BEGIN')
+
+    const result = await fn(transactionAdapter(client, 0))
+    await client.query('COMMIT')
+    return result
+  } catch (err) {
+    try {
+      await client.query('ROLLBACK')
+    } catch (rollbackError) {
+      releaseError = rollbackError
+    }
+    throw err
+  } finally {
+    client.release(releaseError)
+  }
+}
+
+/** The adapter a transaction callback receives, at one nesting level. */
+function transactionAdapter(client, depth) {
+  const nested = serialQueue()
+
+  const txAdapter = {
+    // Carried through deliberately. Anything building SQL from the
+    // adapter reads this to pick a dialect — QueryBuilder defaults to
+    // SQLite without it, so a query builder used inside a transaction
+    // would emit `?` placeholders against Postgres and fail. The migrator
+    // does exactly that for its own bookkeeping.
+    driver: 'postgres',
+
+    // A savepoint inside the transaction already open, since Postgres refuses
+    // a second BEGIN. Migrations run inside one, and a migration that wraps its
+    // own work in `db.transaction()` was legal before that; this keeps it
+    // legal and makes it mean what it says.
+    async transaction(inner) {
+      const child = transactionAdapter(client, depth + 1)
+      return nested(() => withSavepoint(
+        (sql) => client.query(sql),
+        `bb_savepoint_${depth + 1}`,
+        () => inner(child)
+      ))
+    },
+
+    async run(sql, params = []) {
+      const result = await client.query(toNumberedPlaceholders(sql), normalizeParams(params))
+      let lastInsertRowid = null
+      if (result.rows && result.rows[0] && result.rows[0].id !== undefined) {
+        lastInsertRowid = result.rows[0].id
+      }
+      return { lastInsertRowid, changes: result.rowCount }
+    },
+    async get(sql, params = []) {
+      const result = await client.query(toNumberedPlaceholders(sql), normalizeParams(params))
+      return result.rows[0]
+    },
+    async all(sql, params = []) {
+      const result = await client.query(toNumberedPlaceholders(sql), normalizeParams(params))
+      return result.rows
+    },
+    async exec(sql) {
+      await client.query(sql)
+    }
+  }
+
+  return txAdapter
+}
+
+/**
  * Create Postgres adapter
  *
  * @param {string} url - Postgres connection string
  * @param {Object} options - Additional options
  */
 export async function createPostgresAdapter(url, options = {}) {
-  const { Pool } = await loadDriver()
+  const loaded = await loadDriver()
+  // pg is CommonJS; its exports may arrive on `default` depending on version.
+  const driver = loaded.Pool ? loaded : (loaded.default ?? loaded)
+  const { Pool } = driver
 
-  const pool = new Pool(poolOptions(url, options))
+  const pool = new Pool({ ...poolOptions(url, options), types: pgTypes(driver.types) })
 
   // Test connection
   try {
@@ -184,61 +316,12 @@ export async function createPostgresAdapter(url, options = {}) {
     },
 
     /**
-     * Run function in transaction
+     * Run function in transaction.
+     *
+     * Runs on one client checked out of the pool; see `runTransaction`.
      */
     async transaction(fn) {
-      const client = await pool.connect()
-
-      try {
-        await client.query('BEGIN')
-
-        // Create a transaction-scoped adapter
-        const txAdapter = {
-          // Carried through deliberately. Anything building SQL from the
-          // adapter reads this to pick a dialect — QueryBuilder defaults to
-          // SQLite without it, so a query builder used inside a transaction
-          // would emit `?` placeholders against Postgres and fail. The migrator
-          // does exactly that for its own bookkeeping.
-          driver: 'postgres',
-
-          // Joins the transaction already open rather than starting another,
-          // which Postgres refuses. Migrations run inside one now, and a
-          // migration that wraps its own work in `db.transaction()` was legal
-          // before that change; this keeps it legal.
-          async transaction(inner) {
-            return inner(txAdapter)
-          },
-
-          async run(sql, params = []) {
-            const result = await client.query(toNumberedPlaceholders(sql), normalizeParams(params))
-            let lastInsertRowid = null
-            if (result.rows && result.rows[0] && result.rows[0].id !== undefined) {
-              lastInsertRowid = result.rows[0].id
-            }
-            return { lastInsertRowid, changes: result.rowCount }
-          },
-          async get(sql, params = []) {
-            const result = await client.query(toNumberedPlaceholders(sql), normalizeParams(params))
-            return result.rows[0]
-          },
-          async all(sql, params = []) {
-            const result = await client.query(toNumberedPlaceholders(sql), normalizeParams(params))
-            return result.rows
-          },
-          async exec(sql) {
-            await client.query(sql)
-          }
-        }
-
-        const result = await fn(txAdapter)
-        await client.query('COMMIT')
-        return result
-      } catch (err) {
-        await client.query('ROLLBACK')
-        throw err
-      } finally {
-        client.release()
-      }
+      return runTransaction(pool, fn)
     },
 
     /**

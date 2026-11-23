@@ -78,6 +78,18 @@ export function createClientApp(config) {
 
     // Logout function
     const logout = useCallback(() => {
+      // Tell the server before forgetting the token, so an app that revokes
+      // sessions can end this one rather than leaving a copy valid until it
+      // expires. Fire-and-forget: signing out locally must not wait on, or
+      // fail with, the network.
+      const token = localStorage.getItem('token')
+      if (token) {
+        fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          keepalive: true
+        }).catch(() => {})
+      }
       localStorage.removeItem('token')
       setUser(null)
       navigate('/')

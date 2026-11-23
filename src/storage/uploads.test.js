@@ -12,7 +12,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createLocalAdapter } from './adapters/local.js'
-import { signUpload, confirmUpload, deleteUpload, validateUpload, verifyTicket, DEFAULT_ALLOWED_TYPES } from './uploads.js'
+import { signUpload, confirmUpload, deleteUpload, validateUpload, verifyTicket, storedFilename, DEFAULT_ALLOWED_TYPES } from './uploads.js'
+import { resetAppKey } from '../server/app-key.js'
 import { hooks, HOOKS } from '../hooks/index.js'
 
 const SECRET = 'upload-test-secret'
@@ -127,6 +128,96 @@ describe('signUpload', () => {
   test('honours a prefix', async () => {
     const result = await signUpload(validFile, { ...options(), prefix: 'avatars' })
     assert.ok(result.key.startsWith('avatars/'))
+  })
+
+  test('the stored extension comes from the validated type, not the filename', async () => {
+    // The stored-XSS shape: declared image/png, named .html. The key used to
+    // keep .html, and the uploads mount then served it as text/html.
+    const result = await signUpload({ ...validFile, filename: 'x.html' }, options())
+
+    assert.equal(result.ok, true)
+    assert.match(result.key, /-x\.png$/)
+  })
+
+  test('the local upload URL is bound to the declared content type', async () => {
+    const result = await signUpload(validFile, options())
+    const url = new URL(result.uploadUrl, 'http://localhost')
+    const key = decodeURIComponent(url.pathname.replace(/^\/uploads\//, ''))
+    const params = {
+      method: 'PUT',
+      expires: url.searchParams.get('expires'),
+      signature: url.searchParams.get('signature')
+    }
+
+    assert.equal(storage.verifySignedUrl(key, { ...params, contentType: 'image/png' }).valid, true)
+    assert.equal(storage.verifySignedUrl(key, { ...params, contentType: 'text/html' }).valid, false)
+  })
+})
+
+describe('storedFilename', () => {
+  test('replaces the extension with the canonical one for the type', () => {
+    assert.equal(storedFilename('Photo.JPEG', 'image/jpeg'), 'photo.jpg')
+    assert.equal(storedFilename('song.html', 'audio/mpeg'), 'song.mp3')
+    assert.equal(storedFilename('notes', 'text/markdown'), 'notes.md')
+    assert.equal(storedFilename('a.svg', 'text/plain'), 'a.txt')
+  })
+
+  test('a custom type keeps a harmless extension', () => {
+    assert.equal(storedFilename('font.woff2', 'font/woff2'), 'font.woff2')
+  })
+
+  test('a custom type with an active extension becomes .bin', () => {
+    assert.equal(storedFilename('page.html', 'application/x-custom'), 'page.bin')
+    assert.equal(storedFilename('img.svg', 'application/x-custom'), 'img.bin')
+    assert.equal(storedFilename('noext', 'application/x-custom'), 'noext.bin')
+  })
+})
+
+describe('signing keys without APP_KEY', () => {
+  test('production refuses rather than using a built-in key', () => {
+    const saved = { key: process.env.APP_KEY, env: process.env.NODE_ENV }
+    delete process.env.APP_KEY
+    process.env.NODE_ENV = 'production'
+
+    try {
+      assert.throws(() => createLocalAdapter({ dir }), /APP_KEY/)
+      assert.throws(() => verifyTicket({ key: 'k', ticket: `${Math.floor(Date.now() / 1000) + 60}.00` }), /APP_KEY/)
+    } finally {
+      if (saved.key === undefined) delete process.env.APP_KEY; else process.env.APP_KEY = saved.key
+      if (saved.env === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = saved.env
+    }
+  })
+
+  test('development uses a random per-process key, not a constant', () => {
+    const saved = { key: process.env.APP_KEY, env: process.env.NODE_ENV }
+    delete process.env.APP_KEY
+    delete process.env.NODE_ENV
+    resetAppKey()
+
+    const warn = console.warn
+    const warnings = []
+    console.warn = (message) => warnings.push(message)
+
+    try {
+      const a = createLocalAdapter({ dir })
+      const b = createLocalAdapter({ dir })
+      const url = new URL(a.signedUrl('k', { method: 'PUT', expiresIn: 60 }), 'http://localhost')
+      const params = { method: 'PUT', expires: url.searchParams.get('expires'), signature: url.searchParams.get('signature') }
+
+      // Same process, same key — the adapter and the upload receiver agree.
+      assert.equal(b.verifySignedUrl('k', params).valid, true)
+
+      // And it is not the old literal anyone could compute.
+      const literal = createLocalAdapter({ dir, secret: 'basicben-local-storage' })
+      assert.equal(literal.verifySignedUrl('k', params).valid, false)
+
+      assert.equal(warnings.length, 1, 'warns exactly once')
+    } finally {
+      console.warn = warn
+      resetAppKey()
+      if (saved.key === undefined) delete process.env.APP_KEY; else process.env.APP_KEY = saved.key
+      if (saved.env === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = saved.env
+    }
   })
 })
 

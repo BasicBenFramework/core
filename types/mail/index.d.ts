@@ -69,4 +69,4 @@ export { renderMail } from "./render.js";
 import { smtpTransport } from './smtp.js';
 import { resendTransport } from './smtp.js';
 export { smtpTransport, resendTransport };
-export { buildMessage, extractAddresses, extractAddress, encodeHeader } from "./message.js";
+export { buildMessage, extractAddresses, extractAddress, assertEnvelopeAddress, encodeHeader } from "./message.js";

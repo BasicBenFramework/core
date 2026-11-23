@@ -356,7 +356,26 @@ describe('inline structure', () => {
 
 describe('heading anchors', () => {
   test('headings get ids by default', () => {
-    assert.ok(renderMarkdown('# Hello World').includes('id="hello-world"'))
+    // Prefixed like every id in sanitized output, so a heading cannot
+    // clobber a page global by being called "config".
+    assert.ok(renderMarkdown('# Hello World').includes('id="user-content-hello-world"'))
+  })
+
+  test('the prefix can be turned off', () => {
+    assert.ok(renderMarkdown('# Hello World', { idPrefix: '' }).includes('id="hello-world"'))
+  })
+
+  test('an in-document link follows its heading through the prefix', () => {
+    const out = renderMarkdown('[Jump](#intro) [Away](#comments)\n\n# Intro')
+    assert.ok(out.includes('href="#user-content-intro"'), out)
+    assert.ok(out.includes('href="#comments"'), 'a fragment naming no heading is left alone')
+  })
+
+  test('ids and in-page links survive the sanitizer unchanged', () => {
+    const out = renderContentSync('[Jump](#intro)\n\n# Intro')
+    assert.ok(out.includes('id="user-content-intro"'), out)
+    assert.ok(out.includes('href="#user-content-intro"'), out)
+    assert.ok(!out.includes('user-content-user-content-'), 'not prefixed twice')
   })
 
   test('ids can be turned off', () => {
@@ -365,12 +384,12 @@ describe('heading anchors', () => {
 
   test('duplicate headings get distinct ids', () => {
     const out = renderMarkdown('# Same\n\n# Same')
-    assert.ok(out.includes('id="same"'))
-    assert.ok(out.includes('id="same-2"'))
+    assert.ok(out.includes('id="user-content-same"'))
+    assert.ok(out.includes('id="user-content-same-2"'))
   })
 
   test('inline markup is stripped from the slug', () => {
-    assert.ok(renderMarkdown('# A `code` heading').includes('id="a-code-heading"'))
+    assert.ok(renderMarkdown('# A `code` heading').includes('id="user-content-a-code-heading"'))
   })
 })
 
@@ -424,7 +443,7 @@ describe('content pipeline', () => {
   test('headings extracts a table of contents', () => {
     const toc = headings('# One\n\n## Two\n\n### Three')
     assert.deepEqual(toc.map((h) => h.level), [1, 2, 3])
-    assert.deepEqual(toc.map((h) => h.id), ['one', 'two', 'three'])
+    assert.deepEqual(toc.map((h) => h.id), ['user-content-one', 'user-content-two', 'user-content-three'])
   })
 
   test('headings ignores hashes inside code fences', () => {
@@ -485,5 +504,47 @@ describe('robustness', () => {
     const ms = Number(process.hrtime.bigint() - started) / 1e6
 
     assert.ok(ms < 4000, `took ${ms.toFixed(0)}ms`)
+  })
+
+  // Each of these was quadratic or worse, or overflowed the stack. 200 kB is
+  // an ordinary request body; a second per render would already be a lever
+  // for stalling the server, so the bound is that, not "eventually".
+  const PATHOLOGICAL = {
+    'link openers': '[a]('.repeat(50000),
+    'image openers': '![a]('.repeat(40000),
+    'nested brackets': '['.repeat(100000) + ']'.repeat(100000),
+    'unclosed paren titles': '[a](x ('.repeat(28571),
+    'backtick runs of every length': Array.from({ length: 630 }, (_, i) => '`'.repeat(i + 1) + 'a').join(''),
+    'spent emphasis delimiters': '_a*'.repeat(33333) + '*b_'.repeat(33333),
+    'deep emphasis': '*'.repeat(100000) + 'a' + '*'.repeat(100000),
+    'definition-shaped lines': '[a]: <b\n'.repeat(25000),
+    'repeated headings': '# a\n'.repeat(50000),
+    'one long table': '|a|\n|-|\n' + '|a|\n'.repeat(50000)
+  }
+
+  for (const [name, source] of Object.entries(PATHOLOGICAL)) {
+    test(`pathological input renders quickly: ${name}`, () => {
+      const started = process.hrtime.bigint()
+      renderMarkdown(source)
+      const ms = Number(process.hrtime.bigint() - started) / 1e6
+
+      assert.ok(ms < 1000, `${source.length} characters took ${ms.toFixed(0)}ms`)
+    })
+  }
+
+  test('nesting past the depth limit degrades to text instead of overflowing the stack', () => {
+    for (const source of ['>'.repeat(20000), '> '.repeat(20000) + 'x', '- '.repeat(20000) + 'x', '1. '.repeat(20000) + 'x']) {
+      assert.doesNotThrow(() => renderMarkdown(source), source.slice(0, 10))
+    }
+
+    const html = renderMarkdown('>'.repeat(20000))
+    assert.ok(html.includes('&gt;'), 'the excess markers are kept as text')
+    assert.ok((html.match(/<blockquote>/g) || []).length <= 100)
+  })
+
+  test('an unmatched backtick run is literal as a whole', () => {
+    // CommonMark example 349: the double run has no closer, so it cannot be
+    // re-read as a single backtick opening a span with the one at the end.
+    assert.equal(renderMarkdown('``foo`').trim(), '<p>``foo`</p>')
   })
 })
