@@ -66,7 +66,10 @@ export class HookManager {
      * @param {Object} context - Additional context passed to callbacks
      * @returns {Promise<*>} - Filtered value
      */
-    filter(hook: string, value: any, context?: any): Promise<any>;
+    filter(hook: string, value: any, context?: any, options?: {
+        /** Rethrow a listener's error instead of logging it. Use for filters that guard a write. */
+        strict?: boolean;
+    }): Promise<any>;
     /**
      * Check if a hook has any registered callbacks
      *

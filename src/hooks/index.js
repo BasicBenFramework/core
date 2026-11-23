@@ -115,9 +115,13 @@ export class HookManager {
    * @param {string} hook - Hook name
    * @param {*} value - Initial value to filter
    * @param {Object} context - Additional context passed to callbacks
+   * @param {Object} [options]
+   * @param {boolean} [options.strict] - Rethrow a listener's error instead of
+   *   logging it and carrying on. For filters that guard a write: a guard
+   *   that throws must refuse the write, not be skipped and let it through.
    * @returns {Promise<*>} - Filtered value
    */
-  async filter(hook, value, context = {}) {
+  async filter(hook, value, context = {}, options = {}) {
     if (!this.hooks.has(hook)) {
       return value
     }
@@ -133,6 +137,7 @@ export class HookManager {
           filteredValue = result
         }
       } catch (err) {
+        if (options.strict) throw err
         // The value from before this callback carries on, so a broken filter
         // costs its own contribution and nothing else.
         reportHookError(hook, name, err)
