@@ -64,10 +64,13 @@ export class HookManager {
      * @param {string} hook - Hook name
      * @param {*} value - Initial value to filter
      * @param {Object} context - Additional context passed to callbacks
+     * @param {Object} [options]
+     * @param {boolean} [options.strict] - Rethrow a listener's error instead of
+     *   logging it and carrying on. For filters that guard a write: a guard
+     *   that throws must refuse the write, not be skipped and let it through.
      * @returns {Promise<*>} - Filtered value
      */
     filter(hook: string, value: any, context?: any, options?: {
-        /** Rethrow a listener's error instead of logging it. Use for filters that guard a write. */
         strict?: boolean;
     }): Promise<any>;
     /**
