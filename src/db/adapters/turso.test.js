@@ -744,7 +744,7 @@ describe('against a real Turso database', { skip: !liveUrl || !liveToken }, () =
 describe('QueryBuilder over Turso', () => {
   test('insert reports the new id without a RETURNING clause', async () => {
     const users = new QueryBuilder(db, 'users', 'turso')
-    const result = await users.insert({ name: 'Ada', score: 99.5 })
+    const result = await users.only('name', 'score').insert({ name: 'Ada', score: 99.5 })
 
     // libSQL is SQLite: RETURNING is a Postgres-only workaround here, and
     // emitting it would be both unnecessary and wrong.
@@ -763,8 +763,8 @@ describe('QueryBuilder over Turso', () => {
   })
 
   test('where, first and find round-trip', async () => {
-    await new QueryBuilder(db, 'users', 'turso').insert({ name: 'Ada' })
-    await new QueryBuilder(db, 'users', 'turso').insert({ name: 'Grace' })
+    await new QueryBuilder(db, 'users', 'turso').unguarded().insert({ name: 'Ada' })
+    await new QueryBuilder(db, 'users', 'turso').unguarded().insert({ name: 'Grace' })
 
     const found = await new QueryBuilder(db, 'users', 'turso').where('name', 'Grace').first()
     assert.strictEqual(found.name, 'Grace')
@@ -774,10 +774,11 @@ describe('QueryBuilder over Turso', () => {
   })
 
   test('update and delete report their change counts', async () => {
-    await new QueryBuilder(db, 'users', 'turso').insert({ name: 'Ada' })
+    await new QueryBuilder(db, 'users', 'turso').unguarded().insert({ name: 'Ada' })
 
     const updated = await new QueryBuilder(db, 'users', 'turso')
       .where('name', 'Ada')
+      .unguarded()
       .update({ score: 10 })
     assert.strictEqual(updated.changes, 1)
 
@@ -786,8 +787,8 @@ describe('QueryBuilder over Turso', () => {
   })
 
   test('count and exists work through the adapter', async () => {
-    await new QueryBuilder(db, 'users', 'turso').insert({ name: 'Ada' })
-    await new QueryBuilder(db, 'users', 'turso').insert({ name: 'Grace' })
+    await new QueryBuilder(db, 'users', 'turso').unguarded().insert({ name: 'Ada' })
+    await new QueryBuilder(db, 'users', 'turso').unguarded().insert({ name: 'Grace' })
 
     assert.strictEqual(await new QueryBuilder(db, 'users', 'turso').count(), 2)
     assert.strictEqual(await new QueryBuilder(db, 'users', 'turso').where('name', 'Ada').exists(), true)
@@ -795,7 +796,7 @@ describe('QueryBuilder over Turso', () => {
   })
 
   test('whereNull mixed with where binds the right number of parameters', async () => {
-    await new QueryBuilder(db, 'users', 'turso').insert({ name: 'Ada', score: null })
+    await new QueryBuilder(db, 'users', 'turso').unguarded().insert({ name: 'Ada', score: null })
 
     const rows = await new QueryBuilder(db, 'users', 'turso')
       .where('name', 'Ada')

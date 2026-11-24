@@ -23,7 +23,9 @@ export const {{Name}} = {
 
   /**
    * Columns that can be mass-assigned.
-   * Add column names here to allow them in create/update operations.
+   * Add column names here to allow them in create/update operations. Every
+   * insert and update must name its columns: with this list empty, create()
+   * and update() write nothing and throw "No valid columns".
    */
   fillable: [
     // 'name',

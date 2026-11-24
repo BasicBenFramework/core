@@ -56,7 +56,7 @@ describe('Postgres placeholder numbering', () => {
     const qb = new QueryBuilder(db, 'posts', 'postgres')
     qb.whereNull('deleted_at').where('id', 3)
 
-    await qb.update({ title: 'new', body: 'text' })
+    await qb.only('title', 'body').update({ title: 'new', body: 'text' })
 
     const { sql, params } = db.calls[0]
     const placeholders = (sql.match(/\$\d+/g) || []).length
@@ -80,14 +80,14 @@ describe('Postgres placeholder numbering', () => {
 describe('INSERT ... RETURNING', () => {
   test('Postgres inserts return the new id', async () => {
     const db = recordingDb()
-    await new QueryBuilder(db, 'users', 'postgres').insert({ name: 'Ada' })
+    await new QueryBuilder(db, 'users', 'postgres').unguarded().insert({ name: 'Ada' })
 
     assert.match(db.calls[0].sql, /RETURNING id$/)
   })
 
   test('SQLite inserts omit RETURNING', async () => {
     const db = recordingDb()
-    await new QueryBuilder(db, 'users', 'sqlite').insert({ name: 'Ada' })
+    await new QueryBuilder(db, 'users', 'sqlite').unguarded().insert({ name: 'Ada' })
 
     assert.doesNotMatch(db.calls[0].sql, /RETURNING/)
   })

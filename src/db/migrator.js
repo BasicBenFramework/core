@@ -367,7 +367,7 @@ async function getMigrationsByBatch(db, batch) {
  * Record that a migration has run
  */
 async function recordMigration(db, name, batch) {
-  await migrationsTable(db).insert({ migration: name, batch })
+  await migrationsTable(db).only('migration', 'batch').insert({ migration: name, batch })
 }
 
 /**

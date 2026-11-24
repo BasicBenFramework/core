@@ -182,7 +182,7 @@ describe('QueryBuilder', () => {
   describe('INSERT queries', () => {
     test('insert() creates row', async () => {
       const qb = new QueryBuilder(db, 'users')
-      const result = await qb.insert({ name: 'Charlie', email: 'charlie@test.com' })
+      const result = await qb.only('name', 'email').insert({ name: 'Charlie', email: 'charlie@test.com' })
 
       assert.ok(result.lastInsertRowid > 0)
       assert.strictEqual(result.changes, 1)
@@ -206,6 +206,7 @@ describe('QueryBuilder', () => {
       const qb = new QueryBuilder(db, 'users')
       const result = await qb
         .except('id', 'is_admin')
+        .unguarded()
         .insert({ name: 'Eve', email: 'eve@test.com', is_admin: 1 })
 
       const user = await new QueryBuilder(db, 'users').find(result.lastInsertRowid)
@@ -216,7 +217,7 @@ describe('QueryBuilder', () => {
       const qb = new QueryBuilder(db, 'users')
 
       await assert.rejects(
-        () => qb.insert({ 'bad; sql': 'value' }),
+        () => qb.unguarded().insert({ 'bad; sql': 'value' }),
         /Invalid identifier/
       )
     })
@@ -234,7 +235,7 @@ describe('QueryBuilder', () => {
   describe('UPDATE queries', () => {
     test('update() modifies rows', async () => {
       const qb = new QueryBuilder(db, 'users')
-      const result = await qb.where('name', 'Alice').update({ name: 'Alice Updated' })
+      const result = await qb.where('name', 'Alice').only('name').update({ name: 'Alice Updated' })
 
       assert.strictEqual(result.changes, 1)
 
@@ -242,7 +243,7 @@ describe('QueryBuilder', () => {
       assert.strictEqual(user.name, 'Alice Updated')
 
       // Reset
-      await new QueryBuilder(db, 'users').where('email', 'alice@test.com').update({ name: 'Alice' })
+      await new QueryBuilder(db, 'users').where('email', 'alice@test.com').only('name').update({ name: 'Alice' })
     })
 
     test('update() respects fillable', async () => {
@@ -257,7 +258,7 @@ describe('QueryBuilder', () => {
       assert.strictEqual(user.is_admin, 0) // Not updated
 
       // Reset
-      await new QueryBuilder(db, 'users').where('id', 1).update({ name: 'Alice' })
+      await new QueryBuilder(db, 'users').where('id', 1).only('name').update({ name: 'Alice' })
     })
   })
 
@@ -265,7 +266,7 @@ describe('QueryBuilder', () => {
     test('delete() removes rows', async () => {
       // Insert a row to delete
       const insertQb = new QueryBuilder(db, 'users')
-      const { lastInsertRowid } = await insertQb.insert({ name: 'ToDelete', email: 'delete@test.com' })
+      const { lastInsertRowid } = await insertQb.only('name', 'email').insert({ name: 'ToDelete', email: 'delete@test.com' })
 
       const qb = new QueryBuilder(db, 'users')
       const result = await qb.where('id', lastInsertRowid).delete()
@@ -316,7 +317,7 @@ describe('QueryBuilder', () => {
       const qb = new QueryBuilder(db, 'users')
 
       await assert.rejects(
-        () => qb.insert({ "name = 'hacked' WHERE 1=1; --": 'value' }),
+        () => qb.unguarded().insert({ "name = 'hacked' WHERE 1=1; --": 'value' }),
         /Invalid identifier/
       )
     })

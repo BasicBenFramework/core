@@ -123,6 +123,68 @@ export class Grammar {
   }
 
   /**
+   * Escape a column that may be qualified with its table: `title` or
+   * `posts.title`. Each part is validated on its own.
+   *
+   * @param {string} name
+   * @param {{ allowStar?: boolean }} [options] - accept `posts.*`
+   * @returns {string}
+   */
+  escapeColumn(name, options = {}) {
+    if (typeof name !== 'string') this.validateId(name)
+    const parts = name.split('.')
+    if (parts.length > 2) {
+      throw new Error(`Invalid column "${name}": at most one table qualifier`)
+    }
+    if (parts.length === 2) {
+      const column = options.allowStar && parts[1] === '*' ? '*' : this.escapeId(parts[1])
+      return `${this.escapeId(parts[0])}.${column}`
+    }
+    return this.escapeId(name)
+  }
+
+  /**
+   * Escape a SELECT list entry: `*`, a column, `table.*`, or any of those
+   * but `*` followed by `as alias`.
+   *
+   * @param {string} entry
+   * @returns {string}
+   */
+  escapeSelectColumn(entry) {
+    if (entry === '*') return '*'
+    const aliased = typeof entry === 'string' && entry.match(/^\s*(\S+)\s+as\s+(\S+)\s*$/i)
+    if (aliased) {
+      return `${this.escapeColumn(aliased[1])} AS ${this.escapeId(aliased[2])}`
+    }
+    return this.escapeColumn(entry, { allowStar: true })
+  }
+
+  /**
+   * Escape a table reference for a JOIN: `users` or `users as u`.
+   *
+   * @param {string} entry
+   * @returns {string}
+   */
+  escapeTable(entry) {
+    const aliased = typeof entry === 'string' && entry.match(/^\s*(\S+)\s+as\s+(\S+)\s*$/i)
+    if (aliased) {
+      return `${this.escapeId(aliased[1])} AS ${this.escapeId(aliased[2])}`
+    }
+    return this.escapeId(entry)
+  }
+
+  /**
+   * The ESCAPE clause's operand for LIKE: a single backslash, spelled as a
+   * string literal in this dialect. MySQL treats backslash as an escape inside
+   * string literals, so it needs two.
+   *
+   * @returns {string}
+   */
+  likeEscape() {
+    return this.driver === 'planetscale' || this.driver === 'mysql' ? "'\\\\'" : "'\\'"
+  }
+
+  /**
    * Get the placeholder syntax for the current driver.
    *
    * @param {number} index - Zero-based parameter index

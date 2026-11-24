@@ -6,8 +6,9 @@ import { db } from '@basicbenframework/core/db'
  */
 
 export async function seed() {
-  // Example: Insert sample data
-  // await (await db.table('{{tableName}}')).insert({
+  // Example: Insert sample data. Writes name their columns with only(), or
+  // opt out with unguarded() for data the seeder builds itself.
+  // await (await db.table('{{tableName}}')).only('name', 'created_at').insert({
   //   name: 'Sample',
   //   created_at: new Date().toISOString()
   // })
