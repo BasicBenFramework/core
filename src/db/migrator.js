@@ -5,6 +5,8 @@
 
 import { readdirSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { hostname } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import { getDb } from './index.js'
 import { loadConfig } from '../server/loader.js'
@@ -14,6 +16,17 @@ import { QueryBuilder } from './QueryBuilder.js'
 import { isModuleFile, stripModuleExtension } from '../modules.js'
 
 const MIGRATIONS_TABLE = '_migrations'
+const LOCK_TABLE = '_migrations_lock'
+
+/**
+ * The Postgres advisory lock key every `basicben migrate` takes. Arbitrary but
+ * fixed: two runs agree on it because they agree on this number.
+ */
+export const POSTGRES_LOCK_KEY = 7261_0909_2026
+
+/** How long a run waits for another to finish before giving up, by default. */
+const DEFAULT_LOCK_TIMEOUT = 10 * 60 * 1000
+const LOCK_POLL_INTERVAL = 250
 
 /**
  * Grammar for the connected driver.
@@ -77,149 +90,194 @@ async function migrationDirs(given) {
 /**
  * Create migrator instance
  *
+ * migrate, rollback and fresh hold a lock while they run, so two at once —
+ * two replicas deploying together — cannot both apply the same migration. The
+ * second waits for the first, then finds nothing left to do. On Postgres the
+ * lock is a session advisory lock, released by the server if the process
+ * dies. Elsewhere it is a row in `_migrations_lock`; a run that crashes leaves
+ * the row behind, and `basicben migrate:unlock` (unlock()) clears it.
+ *
  * @param {string|string[]} [migrationsDir] - Directory, or directories in the
  *   order they run. Omitted, `migrations` in basicben.config.js, else
  *   `db/migrations`.
  * @param {Object} [connection] - Adapter to use instead of the configured
  *   connection. Tests pass one in to exercise the Postgres dialect, which is
  *   where the bookkeeping SQL differs, without a Postgres server.
+ * @param {Object} [options]
+ * @param {number} [options.lockTimeout] - ms to wait for another run's lock;
+ *   default 10 minutes
+ * @param {boolean} [options.lock] - false runs without the lock
  */
-export async function createMigrator(migrationsDir = undefined, connection = null) {
+export async function createMigrator(migrationsDir = undefined, connection = null, options = {}) {
   const db = connection || await getDb()
   const dirs = await migrationDirs(migrationsDir)
+  const lockTimeout = options.lockTimeout ?? DEFAULT_LOCK_TIMEOUT
+  const locking = options.lock !== false
 
   // A name in two directories would be ambiguous in _migrations, which records
   // names only. Refused before anything runs.
   getMigrationFiles(dirs)
 
-  // Ensure migrations table exists
-  await ensureMigrationsTable(db)
+  /** Run `fn` holding the migration lock, with the migrations table ready. */
+  const exclusive = async (fn) => {
+    if (!locking) {
+      await ensureMigrationsTable(db)
+      return fn()
+    }
+    return withMigrationLock(db, lockTimeout, async () => {
+      // Inside the lock: two CREATE TABLE IF NOT EXISTS racing on Postgres
+      // can still fail on the catalogue's unique index.
+      await ensureMigrationsTable(db)
+      return fn()
+    })
+  }
+
+  const grammar = grammarFor(db)
+
+  async function runPending() {
+    // Read inside the lock, so a run that waited sees what the other applied.
+    const pending = await getPendingMigrations(db, dirs)
+
+    if (pending.length === 0) {
+      return { ran: [], message: 'Nothing to migrate.' }
+    }
+
+    const batch = await getNextBatch(db)
+    const ran = []
+
+    for (const migration of pending) {
+      const module = await loadMigration(migration.path)
+
+      try {
+        if (module.transaction === false) {
+          // Opted out, for statements Postgres refuses inside a transaction
+          // (CREATE INDEX CONCURRENTLY, VACUUM) or SQLite ignores there
+          // (PRAGMA foreign_keys). Nothing is undone on failure, so such a
+          // migration should be safe to run again: IF NOT EXISTS and friends.
+          await module.up(db, grammar)
+          await recordMigration(db, migration.name, batch)
+        } else {
+          // The migration and the row saying it ran commit together, or
+          // neither does. A migration that creates two tables and throws
+          // between them used to leave the first one behind and no record of
+          // it, so the next `migrate` failed on "table already exists" — with
+          // nothing to roll back, because the bookkeeping never happened.
+          await atomically(db, async (tx) => {
+            await module.up(tx, grammar)
+            await recordMigration(tx, migration.name, batch)
+          })
+        }
+
+        ran.push(migration.name)
+      } catch (err) {
+        throw new Error(`Migration failed: ${migration.name}\n${err.message}`)
+      }
+    }
+
+    return { ran, batch }
+  }
 
   return {
     /**
      * Run all pending migrations
      */
     async migrate() {
-      const pending = await getPendingMigrations(db, dirs)
-
-      if (pending.length === 0) {
-        return { ran: [], message: 'Nothing to migrate.' }
-      }
-
-      const batch = await getNextBatch(db)
-      const ran = []
-
-      const grammar = grammarFor(db)
-
-      for (const migration of pending) {
-        const module = await loadMigration(migration.path)
-
-        try {
-          // The migration and the row saying it ran commit together, or neither
-          // does. A migration that creates two tables and throws between them
-          // used to leave the first one behind and no record of it, so the next
-          // `migrate` failed on "table already exists" — with nothing to roll
-          // back, because the bookkeeping never happened.
-          await atomically(db, async (tx) => {
-            await module.up(tx, grammar)
-            await recordMigration(tx, migration.name, batch)
-          })
-
-          ran.push(migration.name)
-        } catch (err) {
-          throw new Error(`Migration failed: ${migration.name}\n${err.message}`)
-        }
-      }
-
-      return { ran, batch }
+      return exclusive(runPending)
     },
 
     /**
      * Roll back the last batch of migrations
      */
     async rollback() {
-      const lastBatch = await getLastBatch(db)
+      return exclusive(async () => {
+        const lastBatch = await getLastBatch(db)
 
-      if (!lastBatch) {
-        return { rolledBack: [], message: 'Nothing to rollback.' }
-      }
-
-      const migrations = await getMigrationsByBatch(db, lastBatch)
-      const rolledBack = []
-      const grammar = grammarFor(db)
-
-      // Roll back in reverse order
-      for (const migration of migrations.reverse()) {
-        const filePath = findMigrationFile(dirs, migration.migration)
-
-        if (!filePath) {
-          throw new Error(`Migration file not found: ${migration.migration}`)
+        if (!lastBatch) {
+          return { rolledBack: [], message: 'Nothing to rollback.' }
         }
 
-        const module = await loadMigration(filePath)
+        const migrations = await getMigrationsByBatch(db, lastBatch)
+        const rolledBack = []
 
-        try {
-          await atomically(db, async (tx) => {
-            await module.down(tx, grammar)
-            await removeMigration(tx, migration.migration)
-          })
+        // Roll back in reverse order
+        for (const migration of migrations.reverse()) {
+          const filePath = findMigrationFile(dirs, migration.migration)
 
-          rolledBack.push(migration.migration)
-        } catch (err) {
-          throw new Error(`Rollback failed: ${migration.migration}\n${err.message}`)
+          if (!filePath) {
+            throw new Error(`Migration file not found: ${migration.migration}`)
+          }
+
+          const module = await loadMigration(filePath)
+
+          try {
+            if (module.transaction === false) {
+              await module.down(db, grammar)
+              await removeMigration(db, migration.migration)
+            } else {
+              await atomically(db, async (tx) => {
+                await module.down(tx, grammar)
+                await removeMigration(tx, migration.migration)
+              })
+            }
+
+            rolledBack.push(migration.migration)
+          } catch (err) {
+            throw new Error(`Rollback failed: ${migration.migration}\n${err.message}`)
+          }
         }
-      }
 
-      return { rolledBack, batch: lastBatch }
+        return { rolledBack, batch: lastBatch }
+      })
     },
 
     /**
      * Drop all tables and re-run all migrations
      */
     async fresh() {
-      // Get all tables
-      const tables = await getAllTables(db)
+      return exclusive(async () => {
+        // Get all tables. The lock table stays: this run is holding it.
+        const tables = (await getAllTables(db)).filter(t => t !== LOCK_TABLE)
 
-      // Nothing here drops in dependency order — the catalogue lists tables
-      // arbitrarily — so foreign keys have to be got out of the way. Postgres
-      // refuses to drop a table another table references unless told to
-      // CASCADE, which drops the dependent constraint, not the dependent table.
-      // SQLite has no such clause: it enforces constraints while emptying the
-      // table, so a parent with rows referencing it cannot be dropped at all,
-      // and enforcement goes off for the duration instead.
-      const isPostgres = grammarFor(db).isPostgres()
-      const cascade = isPostgres ? ' CASCADE' : ''
+        // Nothing here drops in dependency order — the catalogue lists tables
+        // arbitrarily — so foreign keys have to be got out of the way. Postgres
+        // refuses to drop a table another table references unless told to
+        // CASCADE, which drops the dependent constraint, not the dependent
+        // table. SQLite has no such clause: it enforces constraints while
+        // emptying the table, so a parent with rows referencing it cannot be
+        // dropped at all, and enforcement goes off for the duration instead.
+        const isPostgres = grammar.isPostgres()
+        const cascade = isPostgres ? ' CASCADE' : ''
 
-      if (!isPostgres) {
-        await db.exec('PRAGMA foreign_keys = OFF')
-      }
+        if (!isPostgres) {
+          await db.exec('PRAGMA foreign_keys = OFF')
+        }
 
-      try {
-        // Drop all tables (except sqlite internal tables)
-        for (const table of tables) {
-          if (!table.startsWith('sqlite_')) {
-            await db.exec(`DROP TABLE IF EXISTS "${table}"${cascade}`)
+        try {
+          // Drop all tables (except sqlite internal tables)
+          for (const table of tables) {
+            if (!table.startsWith('sqlite_')) {
+              await db.exec(`DROP TABLE IF EXISTS "${table}"${cascade}`)
+            }
+          }
+        } finally {
+          // The SQLite adapter opens every connection with constraints on; a
+          // failed drop must not leave this one running without them.
+          if (!isPostgres) {
+            await db.exec('PRAGMA foreign_keys = ON')
           }
         }
-      } finally {
-        // The SQLite adapter opens every connection with constraints on; a
-        // failed drop must not leave this one running without them.
-        if (!isPostgres) {
-          await db.exec('PRAGMA foreign_keys = ON')
-        }
-      }
 
-      // Re-create migrations table
-      await ensureMigrationsTable(db)
-
-      // Run all migrations
-      return this.migrate()
+        // Re-create migrations table, and run everything
+        await ensureMigrationsTable(db)
+        return runPending()
+      })
     },
 
     /**
      * Get migration status
      */
     async status() {
+      await ensureMigrationsTable(db)
       const files = getMigrationFiles(dirs)
       const ran = await getRanMigrations(db)
       const ranSet = new Set(ran.map(m => m.migration))
@@ -229,7 +287,136 @@ export async function createMigrator(migrationsDir = undefined, connection = nul
         ran: ranSet.has(file.name),
         batch: ran.find(m => m.migration === file.name)?.batch || null
       }))
+    },
+
+    /**
+     * Clear a lock row left by a run that crashed. Only for the lock-table
+     * backends: Postgres releases its advisory lock when the session ends.
+     *
+     * @returns {Promise<{ cleared: boolean, holder?: { owner: string, acquired_at: string } }>}
+     */
+    async unlock() {
+      if (usesAdvisoryLock(db)) return { cleared: false }
+      await ensureLockTable(db)
+      const holder = await db.get(`SELECT owner, acquired_at FROM ${grammar.escapeId(LOCK_TABLE)} WHERE id = 1`)
+      await db.run(`DELETE FROM ${grammar.escapeId(LOCK_TABLE)}`)
+      return holder ? { cleared: true, holder } : { cleared: false }
     }
+  }
+}
+
+/** Postgres with a real pool: a dedicated session can hold an advisory lock. */
+function usesAdvisoryLock(db) {
+  return grammarFor(db).isPostgres() && typeof db.raw?.connect === 'function'
+}
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * Run `fn` holding the migration lock, waiting up to `timeout` ms for it.
+ *
+ * @param {Object} db
+ * @param {number} timeout
+ * @param {() => Promise<any>} fn
+ */
+export async function withMigrationLock(db, timeout, fn) {
+  if (usesAdvisoryLock(db)) return withAdvisoryLock(db.raw, timeout, fn)
+  return withLockRow(db, timeout, fn)
+}
+
+/**
+ * Postgres: a session-level advisory lock on a client checked out for the
+ * purpose. Session-level because the migrations themselves run in their own
+ * transactions on other pooled clients; the lock only has to outlive them.
+ */
+async function withAdvisoryLock(pool, timeout, fn) {
+  const client = await pool.connect()
+  let releaseError
+
+  try {
+    const deadline = Date.now() + timeout
+    for (;;) {
+      const { rows } = await client.query('SELECT pg_try_advisory_lock($1) AS locked', [POSTGRES_LOCK_KEY])
+      if (rows[0]?.locked) break
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `Another basicben migrate holds the migration lock (Postgres advisory lock ${POSTGRES_LOCK_KEY}). ` +
+          `Waited ${Math.round(timeout / 1000)}s. It is released when that run's connection closes.`
+        )
+      }
+      await sleep(LOCK_POLL_INTERVAL)
+    }
+
+    try {
+      return await fn()
+    } finally {
+      try {
+        await client.query('SELECT pg_advisory_unlock($1)', [POSTGRES_LOCK_KEY])
+      } catch (err) {
+        // Destroying the client ends the session, which releases the lock.
+        releaseError = err
+      }
+    }
+  } finally {
+    client.release(releaseError)
+  }
+}
+
+async function ensureLockTable(db) {
+  const grammar = grammarFor(db)
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS ${grammar.escapeId(LOCK_TABLE)} (
+      id INTEGER PRIMARY KEY,
+      owner TEXT NOT NULL,
+      acquired_at TEXT NOT NULL
+    )
+  `)
+}
+
+/**
+ * SQLite, Turso, and anything without a pool to hold a session on: one row
+ * with a fixed primary key. Inserting it is taking the lock; a conflict means
+ * someone else has it. Deleted, by owner, when the run ends.
+ */
+async function withLockRow(db, timeout, fn) {
+  const grammar = grammarFor(db)
+  const table = grammar.escapeId(LOCK_TABLE)
+  const owner = `${hostname()}:${process.pid}:${randomUUID().slice(0, 8)}`
+  const ph = (i) => grammar.placeholder(i)
+
+  await ensureLockTable(db)
+
+  const deadline = Date.now() + timeout
+  for (;;) {
+    let acquired = false
+    try {
+      const result = await db.run(
+        `INSERT INTO ${table} (id, owner, acquired_at) VALUES (1, ${ph(0)}, ${ph(1)}) ON CONFLICT DO NOTHING`,
+        [owner, new Date().toISOString()]
+      )
+      acquired = Number(result?.changes) === 1
+    } catch (err) {
+      // Another process mid-write on the same SQLite file: try again.
+      if (!/busy|locked/i.test(String(err?.message))) throw err
+    }
+    if (acquired) break
+
+    if (Date.now() >= deadline) {
+      const holder = await db.get(`SELECT owner, acquired_at FROM ${table} WHERE id = 1`)
+      throw new Error(
+        `Another basicben migrate holds the migration lock` +
+        (holder ? ` (${holder.owner}, since ${holder.acquired_at})` : '') +
+        `. Waited ${Math.round(timeout / 1000)}s. ` +
+        'If no other run is going, one crashed and left the lock behind: `basicben migrate:unlock` clears it.'
+      )
+    }
+    await sleep(LOCK_POLL_INTERVAL)
+  }
+
+  try {
+    return await fn()
+  } finally {
+    await db.run(`DELETE FROM ${table} WHERE id = 1 AND owner = ${ph(0)}`, [owner])
   }
 }
 
@@ -251,10 +438,11 @@ export async function createMigrator(migrationsDir = undefined, connection = nul
  * adapter had before this existed; it is not a guarantee being dropped
  * quietly, it is one that was never available.
  *
- * Two caveats worth knowing, neither reachable from the migrations this
- * framework ships: Postgres refuses `CREATE INDEX CONCURRENTLY` and `VACUUM`
- * inside a transaction, and SQLite ignores `PRAGMA foreign_keys` there — the
- * table-rebuild pattern that relies on turning it off has to do so outside.
+ * Postgres refuses `CREATE INDEX CONCURRENTLY` and `VACUUM` inside a
+ * transaction, and SQLite ignores `PRAGMA foreign_keys` there — the
+ * table-rebuild pattern that relies on turning it off has to do so outside. A
+ * migration that needs either exports `transaction = false` and runs
+ * unwrapped.
  *
  * @param {Object} db
  * @param {(tx: Object) => Promise<void>} work

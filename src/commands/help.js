@@ -40,6 +40,7 @@ ${bold('Database')}
   ${cyan('migrate:rollback')}   Roll back last batch
   ${cyan('migrate:fresh')}      Drop all and re-run
   ${cyan('migrate:status')}     Show migration status
+  ${cyan('migrate:unlock')}     Clear a crashed run's lock
   ${cyan('seed')}               Run database seeders
 
 ${bold('Options')}

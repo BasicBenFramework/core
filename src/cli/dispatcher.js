@@ -24,6 +24,7 @@ const commands = {
   'migrate:rollback': () => import('../commands/migrate-rollback.js'),
   'migrate:fresh': () => import('../commands/migrate-fresh.js'),
   'migrate:status': () => import('../commands/migrate-status.js'),
+  'migrate:unlock': () => import('../commands/migrate-unlock.js'),
   'migrate:make': () => import('../commands/make-migration.js'), // alias
 
   // Content
@@ -112,6 +113,10 @@ export const commandMeta = {
   'migrate:status': {
     description: 'Show which migrations have run',
     usage: 'basicben migrate:status'
+  },
+  'migrate:unlock': {
+    description: 'Clear a migration lock left by a crashed run (not needed on Postgres)',
+    usage: 'basicben migrate:unlock'
   },
 
   'content:rerender': {

@@ -132,11 +132,11 @@ describe('Migration runner bookkeeping', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  const createTable = db => db.statements().find(sql => sql.includes('CREATE TABLE'))
+  const createTable = db => db.statements().find(sql => sql.includes('CREATE TABLE IF NOT EXISTS "_migrations" ('))
 
   test('Postgres gets a migrations table it can actually create', async () => {
     const db = recordingAdapter('postgres')
-    await createMigrator(dir, db)
+    await (await createMigrator(dir, db)).status()
 
     const ddl = createTable(db)
 
@@ -149,7 +149,7 @@ describe('Migration runner bookkeeping', () => {
 
   test('SQLite keeps its own spelling', async () => {
     const db = recordingAdapter('sqlite')
-    await createMigrator(dir, db)
+    await (await createMigrator(dir, db)).status()
 
     const ddl = createTable(db)
 
@@ -164,7 +164,7 @@ describe('Migration runner bookkeeping', () => {
 
     await migrator.migrate()
 
-    const insert = db.calls.find(c => c.sql.startsWith('INSERT'))
+    const insert = db.calls.find(c => c.sql.startsWith('INSERT INTO "_migrations" '))
     assert.match(insert.sql, /VALUES \(\$1, \$2\)/)
     assert.deepStrictEqual(insert.params, [MIGRATION, 1])
   })
@@ -175,7 +175,7 @@ describe('Migration runner bookkeeping', () => {
 
     await migrator.migrate()
 
-    const insert = db.calls.find(c => c.sql.startsWith('INSERT'))
+    const insert = db.calls.find(c => c.sql.startsWith('INSERT INTO "_migrations" '))
     assert.match(insert.sql, /VALUES \(\?, \?\)/)
     assert.deepStrictEqual(insert.params, [MIGRATION, 1])
   })
