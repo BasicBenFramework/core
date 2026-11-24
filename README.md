@@ -520,6 +520,26 @@ basicben migrate:fresh       # Drop everything and start over
 basicben migrate:status      # See what's run and what hasn't
 ```
 
+### Migrations from more than one directory
+
+An app whose schema ships in a package lists the package's directory before
+its own, in `basicben.config.js`:
+
+```js
+export default {
+  migrations: ['node_modules/some-cms/db/migrations', 'db/migrations']
+}
+```
+
+- **Order:** directories run in list order, and files within one run
+  lexically.
+- **Names stay bare.** `_migrations` records `001_create_users`, not a path,
+  so moving a file from one directory to another changes nothing recorded.
+  For the same reason, a name found in two directories is refused before
+  anything runs, naming both files.
+- **Rollback and status** find a recorded name in whichever directory holds
+  it. `make:migration` still writes to `db/migrations`.
+
 ---
 
 ## Middleware
@@ -1487,6 +1507,10 @@ export default {
     url: process.env.DATABASE_URL || './data.db'
   },
 
+  // Migration directories, in the order they run. Default: 'db/migrations'.
+  // See "Migrations from more than one directory".
+  migrations: ['db/migrations'],
+
   // Security headers, on by default: X-Content-Type-Options: nosniff,
   // Referrer-Policy: strict-origin-when-cross-origin, X-Frame-Options: DENY,
   // Content-Security-Policy: frame-ancestors 'none', and in production
@@ -1504,6 +1528,20 @@ export default {
   autoloadMiddleware: true
 }
 ```
+
+**A config that fails to load stops the app.** No `basicben.config.js` means
+the defaults. A file that exists but can't be imported (a syntax error, an
+import that doesn't resolve, an error it throws) is an error for every
+command, naming the file and the reason. Before 0.8.0 it was logged and
+replaced by defaults, so a typo ran the app with no CORS allowlist and
+console mail, and nothing failed.
+
+**One copy of the framework per process.** The hook registry and the
+database connection live in the framework's modules, so two copies would
+mean two of each, and a listener registered with one would never fire. A
+second copy from another location (a bad dedupe, `npm link`, or a server
+build that bundles the framework) refuses to load, naming both. Install one
+copy, and keep `@basicbenframework/core` in `ssr.external`.
 
 ---
 
