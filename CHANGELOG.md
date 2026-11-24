@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.0 — unreleased
+## 0.9.0 — 2026-11-24
 
 This release finishes the items the November 2026 review left open: S13 and the
 framework P1 list.
