@@ -38,6 +38,7 @@ describe('createApp routing', () => {
     app.get('/tags/:tag', (req, res) => send(res, { tag: req.params.tag }))
     app.get('/search', (req, res) => send(res, { query: req.query }))
     app.get('/about', (req, res) => { seen.push(req.method); send(res, { route: 'about' }) })
+    app.get('/streamed', (req, res) => { res.write('a'); res.end('b') })
     app.head('/own-head', (req, res) => { res.setHeader('X-Head', 'own'); res.end() })
     app.get('/own-head', (req, res) => send(res, { route: 'get' }))
 
@@ -68,14 +69,28 @@ describe('createApp routing', () => {
     assert.strictEqual((await raw(port, 'GET', '/feedXxml')).status, 404)
   })
 
+  test('an encoded slash cannot turn a param into a path', async () => {
+    const res = await raw(port, 'GET', '/tags/..%2F..%2Fetc%2Fpasswd')
+    assert.deepStrictEqual(JSON.parse(res.body), { tag: '..%2F..%2Fetc%2Fpasswd' })
+  })
+
   test('params arrive decoded', async () => {
     const res = await raw(port, 'GET', '/tags/caf%C3%A9%20au%20lait')
     assert.deepStrictEqual(JSON.parse(res.body), { tag: 'café au lait' })
   })
 
-  test('a malformed escape in a param is a 400', async () => {
-    const res = await raw(port, 'GET', '/tags/%E0%A4%A')
-    assert.strictEqual(res.status, 400)
+  test('a malformed escape in a param is a plain 400, not a logged server error', async (t) => {
+    const logged = t.mock.method(console, 'error', () => {})
+    const env = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      const res = await raw(port, 'GET', '/tags/%E0%A4%A')
+      assert.strictEqual(res.status, 400)
+      assert.deepStrictEqual(JSON.parse(res.body), { error: 'Bad Request' })
+      assert.strictEqual(logged.mock.callCount(), 0)
+    } finally {
+      process.env.NODE_ENV = env
+    }
   })
 
   test('repeated query keys are kept', async () => {
@@ -90,6 +105,20 @@ describe('createApp routing', () => {
     assert.strictEqual(res.headers['content-type'], 'application/json')
     assert.strictEqual(res.body, '')
     assert.deepStrictEqual(seen, ['HEAD'])
+
+    // The length GET would send.
+    const get = await raw(port, 'GET', '/about')
+    assert.strictEqual(res.headers['content-length'], String(Buffer.byteLength(get.body)))
+    assert.strictEqual(res.headers['content-length'], get.headers['content-length'])
+  })
+
+  test('HEAD keeps a multi-byte body\'s byte length, and leaves a streamed body chunked', async () => {
+    const res = await raw(port, 'HEAD', '/tags/caf%C3%A9')
+    const get = await raw(port, 'GET', '/tags/caf%C3%A9')
+    assert.strictEqual(res.headers['content-length'], get.headers['content-length'])
+
+    const streamed = await raw(port, 'HEAD', '/streamed')
+    assert.strictEqual(streamed.headers['content-length'], undefined)
   })
 
   test('a HEAD route of its own wins over the GET fallback', async () => {
@@ -119,8 +148,14 @@ describe('Router.match and Router.route', () => {
   test('route() encodes values so they round-trip', () => {
     const router = new Router()
     router.get('/tags/:tag', 'tags.show', () => {})
-    const url = router.route('tags.show', { tag: 'a/b c' })
-    assert.strictEqual(url, '/tags/a%2Fb%20c')
-    assert.deepStrictEqual(router.match('GET', url).params, { tag: 'a/b c' })
+    const url = router.route('tags.show', { tag: 'a b&c?' })
+    assert.strictEqual(url, '/tags/a%20b%26c%3F')
+    assert.deepStrictEqual(router.match('GET', url).params, { tag: 'a b&c?' })
+
+    // A slash is encoded so the URL still matches; it comes back encoded,
+    // because a param never carries a separator.
+    const slashed = router.route('tags.show', { tag: 'a/b' })
+    assert.strictEqual(slashed, '/tags/a%2Fb')
+    assert.deepStrictEqual(router.match('GET', slashed).params, { tag: 'a%2Fb' })
   })
 })

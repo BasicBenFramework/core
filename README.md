@@ -257,13 +257,14 @@ means the same thing everywhere:
 
 - **Params** (`/users/:id`, or part of a segment: `/feed/:name.xml`) match one
   segment and arrive URI-decoded: `/tags/caf%C3%A9` gives `req.params.tag === 'café'`.
-  A malformed escape is answered `400`.
+  `%2F` and `%5C` stay encoded, so a param never carries a path separator: `..%2Fetc`
+  stays `..%2Fetc`. A malformed escape gets a plain `400`.
 - **Literals are literal.** The `.` in `/feed.xml` matches only a dot.
 - **Trailing slashes don't matter.** `/about/` matches `/about`, and so does the reverse.
 - **A trailing `*`** (`/files/*`) matches the rest of the path, including
   nothing, as `req.params._catchAll`.
 - **HEAD** runs the GET route when there is no HEAD route of its own. Node sends
-  the headers and drops the body.
+  the headers, including the GET's Content-Length, and drops the body.
 - **`req.query`** keeps repeated keys: `?tag=a&tag=b` is `{ tag: ['a', 'b'] }`,
   and a key given once is a plain string. Check with `typeof` before calling
   string methods.
@@ -542,6 +543,9 @@ const posts = await (await db.table('posts'))
   in user input literal. SQLite and Turso fold ASCII only. Wrapping the column
   in `LOWER()` also stops a plain index on it from being used.
 - `update()` and `delete()` refuse a join.
+- **`undefined` is refused in a where clause.** Only `null` means IS NULL, so a
+  missing input can't match every row with an empty column. In `insert()` and
+  `update()` an undefined value is left out; pass `null` to write NULL.
 
 #### Mass assignment
 
@@ -624,14 +628,18 @@ deploying at once can't both apply a migration. The second waits for the
 first, up to 10 minutes, and then finds nothing left to do.
 
 - **Postgres:** a session advisory lock. The server releases it if the process
-  dies. It holds one pooled connection while migrations run on others, so the
-  pool needs at least two.
+  dies. It holds one pooled connection while migrations run on others, so with
+  `poolSize: 1` the lock row below is used instead. So it is behind a
+  transaction-mode pooler (a Neon `-pooler` host, port 6432), where a session
+  lock isn't tied to one server session. For a pooler on any other address, set
+  `migrationLock: 'table'` in basicben.config.js.
 - **SQLite and Turso:** a row in `_migrations_lock`. A run that crashes leaves the
   row behind; the next run times out with a message naming the holder, and
   `basicben migrate:unlock` clears it.
 
-`createMigrator(dirs, connection, { lockTimeout, lock: false })` changes the
-wait, or turns the lock off.
+`migrationLock` in basicben.config.js is `'auto'` (the default), `'advisory'`,
+`'table'` or `false`. `createMigrator(dirs, connection, { lockTimeout, lock })`
+changes the wait and the choice.
 
 ### Rolling back
 

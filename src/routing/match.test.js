@@ -45,8 +45,9 @@ describe('compileRoute', () => {
     const route = compileRoute('/tags/:tag')
     assert.deepStrictEqual(route.match('/tags/caf%C3%A9'), { tag: 'café' })
     assert.deepStrictEqual(route.match('/tags/a%20b'), { tag: 'a b' })
-    // An encoded slash stays inside its segment and decodes afterwards.
-    assert.deepStrictEqual(route.match('/tags/a%2Fb'), { tag: 'a/b' })
+    // An encoded slash or backslash stays encoded: a param is never a path.
+    assert.deepStrictEqual(route.match('/tags/a%2Fb'), { tag: 'a%2Fb' })
+    assert.deepStrictEqual(route.match('/tags/a%2fb%5cc%20d'), { tag: 'a%2Fb%5Cc d' })
     assert.strictEqual(route.match('/tags/a/b'), null)
   })
 
@@ -69,10 +70,26 @@ describe('compileRoute', () => {
   test('a trailing * catches the rest, including nothing, and decodes it', () => {
     const route = compileRoute('/files/*')
     assert.deepStrictEqual(route.match('/files/a/b%20c.txt'), { _catchAll: 'a/b c.txt' })
+    assert.deepStrictEqual(route.match('/files/..%2F..%2Fetc%2Fpasswd'), { _catchAll: '..%2F..%2Fetc%2Fpasswd' })
     assert.deepStrictEqual(route.match('/files'), { _catchAll: '' })
     assert.deepStrictEqual(route.match('/files/'), { _catchAll: '' })
     assert.strictEqual(route.match('/filesystem'), null)
     assert.deepStrictEqual(compileRoute('/*').match('/anything/at/all'), { _catchAll: 'anything/at/all' })
+  })
+
+  test('no request gives a param or catch-all a .. segment or a separator it did not have', () => {
+    const files = compileRoute('/files/*')
+    const one = compileRoute('/p/:id')
+    for (const attack of ['/files/..%2F..%2Fetc%2Fpasswd', '/files/%2e%2e/%2e%2e/etc/passwd', '/files/..%5C..%5Cwin.ini', '/files/a/../../etc']) {
+      const pathname = new URL('http://x' + attack).pathname
+      const params = files.match(pathname)
+      if (params) assert.ok(!params._catchAll.split('/').includes('..'), `${attack} -> ${params._catchAll}`)
+      assert.ok(!params?._catchAll.includes('\\'), attack)
+    }
+    for (const attack of ['/p/..%2Fsecret', '/p/a%5Cb', '/p/%2e%2e']) {
+      const params = one.match(new URL('http://x' + attack).pathname)
+      if (params) assert.ok(!/[\/\\]/.test(params.id) && params.id !== '..', `${attack} -> ${params.id}`)
+    }
   })
 
   test('* alone matches every path', () => {

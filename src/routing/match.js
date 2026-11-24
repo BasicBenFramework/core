@@ -8,9 +8,12 @@
  *
  * Pattern syntax:
  * - `/posts/:id` — a param matches one non-empty segment, or part of one
- *   (`/feed/:name.xml`). Its value is URI-decoded.
+ *   (`/feed/:name.xml`). Its value is URI-decoded, except `%2F` and `%5C`,
+ *   which stay encoded so a param never carries a path separator.
  * - `/files/*` — a trailing `*` matches the rest of the path, including
- *   nothing; the value is `params._catchAll`, decoded.
+ *   nothing; the value is `params._catchAll`, decoded the same way. Its `/`
+ *   are the request's own separators; `..` segments never reach it, because
+ *   URL parsing resolves them first.
  * - `*` on its own matches every path.
  * - Everything else is literal: `.`, `(`, `+` and friends mean themselves.
  *
@@ -72,9 +75,21 @@ function badRequest(raw) {
   return err
 }
 
+/**
+ * Decode a param, except for an encoded slash or backslash.
+ *
+ * `%2F` and `%5C` stay as they are, uppercased. Decoded, they would turn one
+ * segment into a path: `/files/..%2F..%2Fetc%2Fpasswd` would give
+ * `../../etc/passwd`, and an app joining that onto a directory would be
+ * traversable. URL parsing has already resolved real `..` segments, including
+ * `%2e%2e`, so with these two kept encoded a param cannot climb a directory.
+ */
 function decode(raw) {
   try {
-    return decodeURIComponent(raw)
+    return raw
+      .split(/(%2F|%5C)/i)
+      .map((part, i) => (i % 2 === 1 ? part.toUpperCase() : decodeURIComponent(part)))
+      .join('')
   } catch {
     throw badRequest(raw)
   }

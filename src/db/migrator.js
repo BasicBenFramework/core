@@ -97,6 +97,13 @@ async function migrationDirs(given) {
  * dies. Elsewhere it is a row in `_migrations_lock`; a run that crashes leaves
  * the row behind, and `basicben migrate:unlock` (unlock()) clears it.
  *
+ * Postgres falls back to the row when an advisory lock can't be trusted: a
+ * pool of one connection (the lock would hold it, and every migration would
+ * wait for it), or a connection that looks like a transaction-mode pooler — a
+ * Neon `-pooler` host or PgBouncer's port 6432 — where the lock and the
+ * unlock can land on different server sessions. `migrationLock` in
+ * basicben.config.js, or the `lock` option, says which to use outright.
+ *
  * @param {string|string[]} [migrationsDir] - Directory, or directories in the
  *   order they run. Omitted, `migrations` in basicben.config.js, else
  *   `db/migrations`.
@@ -106,13 +113,21 @@ async function migrationDirs(given) {
  * @param {Object} [options]
  * @param {number} [options.lockTimeout] - ms to wait for another run's lock;
  *   default 10 minutes
- * @param {boolean} [options.lock] - false runs without the lock
+ * @param {boolean|'auto'|'advisory'|'table'} [options.lock] - which lock:
+ *   'auto' (the default) as above, 'advisory' or 'table' to choose, false for
+ *   none. Omitted, `migrationLock` in basicben.config.js when the migrator
+ *   reads the config itself.
  */
 export async function createMigrator(migrationsDir = undefined, connection = null, options = {}) {
   const db = connection || await getDb()
   const dirs = await migrationDirs(migrationsDir)
   const lockTimeout = options.lockTimeout ?? DEFAULT_LOCK_TIMEOUT
-  const locking = options.lock !== false
+  let lockMode = options.lock
+  if (lockMode === undefined && connection === null) {
+    lockMode = (await loadConfig()).migrationLock
+  }
+  lockMode = normalizeLockMode(lockMode)
+  const locking = lockMode !== false
 
   // A name in two directories would be ambiguous in _migrations, which records
   // names only. Refused before anything runs.
@@ -124,7 +139,7 @@ export async function createMigrator(migrationsDir = undefined, connection = nul
       await ensureMigrationsTable(db)
       return fn()
     }
-    return withMigrationLock(db, lockTimeout, async () => {
+    return withMigrationLock(db, lockTimeout, lockMode, async () => {
       // Inside the lock: two CREATE TABLE IF NOT EXISTS racing on Postgres
       // can still fail on the catalogue's unique index.
       await ensureMigrationsTable(db)
@@ -296,7 +311,7 @@ export async function createMigrator(migrationsDir = undefined, connection = nul
      * @returns {Promise<{ cleared: boolean, holder?: { owner: string, acquired_at: string } }>}
      */
     async unlock() {
-      if (usesAdvisoryLock(db)) return { cleared: false }
+      if (lockMode !== false && usesAdvisoryLock(db, lockMode)) return { cleared: false }
       await ensureLockTable(db)
       const holder = await db.get(`SELECT owner, acquired_at FROM ${grammar.escapeId(LOCK_TABLE)} WHERE id = 1`)
       await db.run(`DELETE FROM ${grammar.escapeId(LOCK_TABLE)}`)
@@ -305,9 +320,41 @@ export async function createMigrator(migrationsDir = undefined, connection = nul
   }
 }
 
-/** Postgres with a real pool: a dedicated session can hold an advisory lock. */
-function usesAdvisoryLock(db) {
-  return grammarFor(db).isPostgres() && typeof db.raw?.connect === 'function'
+function normalizeLockMode(mode) {
+  if (mode === undefined || mode === null || mode === true || mode === 'auto') return 'auto'
+  if (mode === false || mode === 'advisory' || mode === 'table') return mode
+  throw new Error(`migrationLock must be 'auto', 'advisory', 'table' or false, not ${JSON.stringify(mode)}`)
+}
+
+/**
+ * Whether a connection string looks like a transaction-mode pooler, where a
+ * session advisory lock is not held by any one session: a Neon `-pooler`
+ * host, or PgBouncer's conventional port.
+ */
+export function looksLikePooler(poolOptions = {}) {
+  const url = String(poolOptions.connectionString ?? '')
+  const host = String(poolOptions.host ?? '')
+  const port = String(poolOptions.port ?? '')
+  return /-pooler[.:/]/i.test(url) || /-pooler\./i.test(host) ||
+    /:6432(?:\/|$|\?)/.test(url) || port === '6432'
+}
+
+/**
+ * Postgres with a pool that can spare a session for the advisory lock.
+ *
+ * @param {Object} db
+ * @param {'auto'|'advisory'|'table'} mode
+ */
+function usesAdvisoryLock(db, mode = 'auto') {
+  if (mode === 'table') return false
+  if (!grammarFor(db).isPostgres() || typeof db.raw?.connect !== 'function') return false
+  if (mode === 'advisory') return true
+
+  const options = db.raw.options ?? {}
+  // The lock holds one client for the whole run, so a pool of one would
+  // leave nothing for the migrations themselves.
+  if (Number(options.max ?? 10) < 2) return false
+  return !looksLikePooler(options)
 }
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
@@ -317,10 +364,15 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
  *
  * @param {Object} db
  * @param {number} timeout
- * @param {() => Promise<any>} fn
+ * @param {'auto'|'advisory'|'table'|(() => Promise<any>)} mode - or `fn`, for 'auto'
+ * @param {() => Promise<any>} [fn]
  */
-export async function withMigrationLock(db, timeout, fn) {
-  if (usesAdvisoryLock(db)) return withAdvisoryLock(db.raw, timeout, fn)
+export async function withMigrationLock(db, timeout, mode, fn) {
+  if (typeof mode === 'function') {
+    fn = mode
+    mode = 'auto'
+  }
+  if (usesAdvisoryLock(db, mode)) return withAdvisoryLock(db.raw, timeout, fn)
   return withLockRow(db, timeout, fn)
 }
 
@@ -362,15 +414,36 @@ async function withAdvisoryLock(pool, timeout, fn) {
   }
 }
 
+/**
+ * Create the lock table if it is missing.
+ *
+ * This runs before there is a lock to hold, so two runs can race here. On
+ * Postgres two CREATE TABLE IF NOT EXISTS at once can still fail on the
+ * catalogue's unique index ("duplicate key value violates unique constraint
+ * pg_type_typname_nsp_index"), and on SQLite the second can find the file
+ * busy. Either way the other run is creating the same table, so the error is
+ * retried, and a retry that finds the table there is done.
+ */
 async function ensureLockTable(db) {
   const grammar = grammarFor(db)
-  await db.exec(`
+  const sql = `
     CREATE TABLE IF NOT EXISTS ${grammar.escapeId(LOCK_TABLE)} (
       id INTEGER PRIMARY KEY,
       owner TEXT NOT NULL,
       acquired_at TEXT NOT NULL
     )
-  `)
+  `
+
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await db.exec(sql)
+      return
+    } catch (err) {
+      const racing = /already exists|duplicate key|pg_type_typname|busy|locked/i.test(String(err?.message))
+      if (!racing || attempt >= 5) throw err
+      await sleep(50 * attempt)
+    }
+  }
 }
 
 /**
@@ -413,11 +486,29 @@ async function withLockRow(db, timeout, fn) {
     await sleep(LOCK_POLL_INTERVAL)
   }
 
+  let result
+  let failure = null
   try {
-    return await fn()
-  } finally {
-    await db.run(`DELETE FROM ${table} WHERE id = 1 AND owner = ${ph(0)}`, [owner])
+    result = await fn()
+  } catch (err) {
+    failure = { err }
   }
+
+  try {
+    await db.run(`DELETE FROM ${table} WHERE id = 1 AND owner = ${ph(0)}`, [owner])
+  } catch (releaseError) {
+    // The migration's own error is the one worth seeing; a stuck lock row
+    // is reported alongside it, not instead of it.
+    const advice = `The migration lock could not be released (${releaseError.message}); \`basicben migrate:unlock\` clears it.`
+    if (failure && failure.err instanceof Error) {
+      failure.err.message += `\n${advice}`
+    } else if (!failure) {
+      throw new Error(`Migrations finished. ${advice}`)
+    }
+  }
+
+  if (failure) throw failure.err
+  return result
 }
 
 /**

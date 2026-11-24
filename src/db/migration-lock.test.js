@@ -255,7 +255,7 @@ describe('the migration lock (Postgres advisory lock)', () => {
   })
 })
 
-describe('the migration lock on a real Postgres', { skip: !process.env.TEST_POSTGRES_URL && 'set TEST_POSTGRES_URL to run' }, () => {
+describe('the migration lock on a real Postgres (advisory)', { skip: !process.env.TEST_POSTGRES_URL && 'set TEST_POSTGRES_URL to run' }, () => {
   test('two concurrent migrate runs apply each migration once', async () => {
     const { createPostgresAdapter } = await import('./adapters/postgres.js')
     const a = await createPostgresAdapter(process.env.TEST_POSTGRES_URL)
@@ -292,6 +292,132 @@ describe('the migration lock on a real Postgres', { skip: !process.env.TEST_POST
       assert.deepStrictEqual(rolledBack, ['002_concurrently', '001_slow'])
     } finally {
       await a.exec('DROP TABLE IF EXISTS lock_runs, _migrations CASCADE').catch(() => {})
+      await a.close()
+      await b.close()
+    }
+  })
+})
+
+describe('choosing the lock', () => {
+  /** A Postgres-flavoured adapter whose lock-row SQL works in memory. */
+  function pgLike(poolOptions, { failCreate = 0, failDelete = false } = {}) {
+    let row = null
+    const log = []
+    let connects = 0
+    return {
+      log,
+      get connects() { return connects },
+      driver: 'postgres',
+      raw: { options: poolOptions, connect: async () => { connects++; return { query: async () => ({ rows: [{ locked: true }] }), release() {} } } },
+      async exec(sql) {
+        log.push(sql)
+        if (sql.includes('CREATE TABLE') && failCreate-- > 0) {
+          throw new Error('duplicate key value violates unique constraint "pg_type_typname_nsp_index"')
+        }
+      },
+      async run(sql, params) {
+        log.push(sql)
+        if (sql.startsWith('INSERT INTO "_migrations_lock"')) {
+          if (row) return { changes: 0 }
+          row = { owner: params[0], acquired_at: params[1] }
+          return { changes: 1 }
+        }
+        if (sql.startsWith('DELETE FROM "_migrations_lock"')) {
+          if (failDelete) throw new Error('connection reset')
+          row = null
+          return { changes: 1 }
+        }
+        return { changes: 0 }
+      },
+      async get() { return row ?? undefined },
+      async all() { return [] }
+    }
+  }
+
+  const usedRow = (db) => db.log.some(sql => sql.startsWith('INSERT INTO "_migrations_lock"'))
+
+  test('a pool of one falls back to the lock row instead of deadlocking', async () => {
+    const db = pgLike({ max: 1, connectionString: 'postgres://u@db.example/app' })
+    await withMigrationLock(db, 1000, async () => {})
+    assert.strictEqual(db.connects, 0, 'no client held for an advisory lock')
+    assert.ok(usedRow(db))
+  })
+
+  test('a transaction-mode pooler falls back to the lock row', async () => {
+    for (const connectionString of ['postgres://u@ep-cool-1-pooler.us-east-2.aws.neon.tech/app', 'postgres://u@pgbouncer.internal:6432/app']) {
+      const db = pgLike({ max: 10, connectionString })
+      await withMigrationLock(db, 1000, async () => {})
+      assert.strictEqual(db.connects, 0, connectionString)
+      assert.ok(usedRow(db), connectionString)
+    }
+  })
+
+  test('an ordinary pool uses the advisory lock; the mode can be forced either way', async () => {
+    const plain = pgLike({ max: 10, connectionString: 'postgres://u@db.example/app' })
+    await withMigrationLock(plain, 1000, async () => {})
+    assert.strictEqual(plain.connects, 1)
+    assert.ok(!usedRow(plain))
+
+    const forcedTable = pgLike({ max: 10, connectionString: 'postgres://u@db.example/app' })
+    await withMigrationLock(forcedTable, 1000, 'table', async () => {})
+    assert.ok(usedRow(forcedTable))
+
+    const forcedAdvisory = pgLike({ max: 10, connectionString: 'postgres://u@x-pooler.neon.tech/app' })
+    await withMigrationLock(forcedAdvisory, 1000, 'advisory', async () => {})
+    assert.strictEqual(forcedAdvisory.connects, 1)
+  })
+
+  test('createMigrator refuses an unknown lock mode', async () => {
+    await assert.rejects(createMigrator(dir, pgLike({}), { lock: 'sometimes' }), /migrationLock must be/)
+  })
+
+  test('two runs racing to create the lock table do not fail', async () => {
+    const db = pgLike({ max: 1 }, { failCreate: 2 })
+    assert.strictEqual(await withMigrationLock(db, 1000, async () => 'done'), 'done')
+    assert.strictEqual(db.log.filter(sql => sql.includes('CREATE TABLE')).length, 3)
+  })
+
+  test('a failed release does not hide the migration error', async () => {
+    const db = pgLike({ max: 1 }, { failDelete: true })
+    await assert.rejects(
+      withMigrationLock(db, 1000, async () => { throw new Error('Migration failed: 001_bad') }),
+      (err) => /Migration failed: 001_bad/.test(err.message) && /migrate:unlock/.test(err.message)
+    )
+  })
+
+  test('a failed release after a successful run says so', async () => {
+    const db = pgLike({ max: 1 }, { failDelete: true })
+    await assert.rejects(withMigrationLock(db, 1000, async () => {}), /Migrations finished\. The migration lock could not be released/)
+  })
+})
+
+describe('the migration lock on a real Postgres (lock row)', { skip: !process.env.TEST_POSTGRES_URL && 'set TEST_POSTGRES_URL to run' }, () => {
+  test('pools of one fall back to the row, and two runs still apply each migration once', async () => {
+    const { createPostgresAdapter } = await import('./adapters/postgres.js')
+    const a = await createPostgresAdapter(process.env.TEST_POSTGRES_URL, { poolSize: 1 })
+    const b = await createPostgresAdapter(process.env.TEST_POSTGRES_URL, { poolSize: 1 })
+
+    try {
+      await a.exec('DROP TABLE IF EXISTS lock_rows, _migrations, _migrations_lock CASCADE')
+      migration('001_slow', `
+        export const up = async (db) => {
+          await db.exec('CREATE TABLE lock_rows (n INTEGER)')
+          await db.run('INSERT INTO lock_rows (n) VALUES (1)')
+          await new Promise(r => setTimeout(r, 300))
+        }
+        export const down = async (db) => { await db.exec('DROP TABLE lock_rows') }
+      `)
+
+      const results = await Promise.all([
+        createMigrator(dir, a, { lockTimeout: 10_000 }).then(m => m.migrate()),
+        createMigrator(dir, b, { lockTimeout: 10_000 }).then(m => m.migrate())
+      ])
+
+      assert.deepStrictEqual(results.map(r => r.ran).flat(), ['001_slow'])
+      assert.deepStrictEqual((await a.all('SELECT n FROM lock_rows')).map(r => r.n), [1])
+      assert.deepStrictEqual(await a.all('SELECT * FROM _migrations_lock'), [], 'released')
+    } finally {
+      await a.exec('DROP TABLE IF EXISTS lock_rows, _migrations, _migrations_lock CASCADE').catch(() => {})
       await a.close()
       await b.close()
     }

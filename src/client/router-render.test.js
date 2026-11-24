@@ -116,8 +116,8 @@ describe('client router, rendered', { skip }, () => {
     assert.strictEqual(prevented, false, 'cmd-click opens a tab as usual')
   })
 
-  test('useSearchParams reads the query and its setter keeps the path', () => {
-    const calls = fakeBrowser('https://app.test/posts?page=2&tag=a&tag=b')
+  test('useSearchParams reads the query and its setter keeps the path and hash', () => {
+    const calls = fakeBrowser('https://app.test/posts?page=2&tag=a&tag=b#comments')
     let params, setParams
     const Page = () => {
       ;[params, setParams] = client.useSearchParams()
@@ -128,9 +128,9 @@ describe('client router, rendered', { skip }, () => {
     assert.deepStrictEqual(params.getAll('tag'), ['a', 'b'])
 
     setParams(p => { p.set('page', '3'); return p })
-    assert.deepStrictEqual(calls.find(c => c[0] === 'pushState'), ['pushState', '/posts?page=3&tag=a&tag=b'])
+    assert.deepStrictEqual(calls.find(c => c[0] === 'pushState'), ['pushState', '/posts?page=3&tag=a&tag=b#comments'])
 
     setParams({ q: 'x' }, { replace: true })
-    assert.deepStrictEqual(calls.find(c => c[0] === 'replaceState'), ['replaceState', '/posts?q=x'])
+    assert.deepStrictEqual(calls.find(c => c[0] === 'replaceState'), ['replaceState', '/posts?q=x#comments'])
   })
 })

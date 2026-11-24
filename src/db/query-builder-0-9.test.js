@@ -101,8 +101,37 @@ describe('null comparisons', () => {
     assert.match(users().where('deleted_at', '<>', null).toSql(), /IS NOT NULL/)
   })
 
-  test('an explicit undefined value is treated as null, not as the shorthand', () => {
-    assert.match(users().where('deleted_at', '=', undefined).toSql(), /IS NULL/)
+  test('undefined is refused, never read as IS NULL', async () => {
+    // A missing input must not match every row whose column is empty.
+    const token = undefined
+    assert.throws(() => users().where('deleted_at', token), { code: 'UNDEFINED_VALUE' })
+    assert.throws(() => users().where('deleted_at', '=', undefined), /Pass null to compare with IS NULL/)
+    assert.throws(() => users().where('deleted_at', '!=', undefined), { code: 'UNDEFINED_VALUE' })
+    assert.throws(() => users().orWhere('deleted_at', undefined), { code: 'UNDEFINED_VALUE' })
+    assert.throws(() => users().where(q => q.where('deleted_at', undefined)), { code: 'UNDEFINED_VALUE' })
+    assert.throws(() => users().where('email'), { code: 'UNDEFINED_VALUE' })
+    assert.throws(() => users().whereIn('id', [1, undefined]), { code: 'UNDEFINED_VALUE' })
+    assert.throws(() => users().where('id', 'IN', [undefined]), { code: 'UNDEFINED_VALUE' })
+    assert.throws(() => users().whereIn('id', undefined), /needs an array/)
+    assert.throws(() => users().whereNotIn('id', undefined), /needs an array/)
+  })
+
+  test('an undefined value in a write is left out, not written as NULL', async () => {
+    const { lastInsertRowid } = await users().only('name', 'email').insert({ name: 'Uma', email: undefined })
+    assert.strictEqual((await users().find(lastInsertRowid)).email, null)
+
+    await users().only('email').where('id', lastInsertRowid).update({ email: 'uma@x.test' })
+    // A missing input must not clear the column.
+    await assert.rejects(() => users().only('email', 'name').where('id', lastInsertRowid).update({ email: undefined }), /No valid columns/)
+    await users().only('email', 'name').where('id', lastInsertRowid).update({ email: undefined, name: 'Uma B' })
+    const row = await users().find(lastInsertRowid)
+    assert.strictEqual(row.email, 'uma@x.test')
+    assert.strictEqual(row.name, 'Uma B')
+
+    // null still writes NULL.
+    await users().only('email').where('id', lastInsertRowid).update({ email: null })
+    assert.strictEqual((await users().find(lastInsertRowid)).email, null)
+    await users().where('id', lastInsertRowid).delete()
   })
 
   test('ordering operators refuse null', () => {

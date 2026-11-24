@@ -131,13 +131,18 @@ export function createApp(options = {}) {
     req.query = parseQuery(url.searchParams)
     req.params = {}
 
+    if (req.method === 'HEAD') keepContentLength(res)
+
     // Find matching route. A param that is not valid percent-encoding is the
-    // client's error, answered 400 through the error handler.
+    // client's error: a plain 400 after the global middleware (so it carries
+    // the security headers), not an exception for the error handler to log
+    // as a server error.
     let matched
     try {
       matched = matchRoute(req.method, req.path)
     } catch (err) {
-      return runMiddleware([...middleware, () => { throw err }], req, res)
+      if (err?.statusCode !== 400) throw err
+      return runMiddleware([...middleware, () => sendBadRequest(res)], req, res)
     }
 
     if (matched) {
@@ -193,6 +198,44 @@ export function createApp(options = {}) {
   }
 
   return app
+}
+
+/**
+ * A plain 400 for a request whose URL cannot be decoded.
+ */
+function sendBadRequest(res) {
+  if (res.headersSent) return
+  res.statusCode = 400
+  res.setHeader('Content-Type', 'application/json')
+  res.end(JSON.stringify({ error: 'Bad Request' }))
+}
+
+/**
+ * Give a HEAD response the Content-Length its GET would have had.
+ *
+ * Node drops the body of a HEAD response, and with it the length it would
+ * have computed from `res.end(body)`, so a HEAD that ran the GET route went
+ * out with no Content-Length at all. A response written in pieces with
+ * `res.write()` is chunked on GET too, and is left alone.
+ */
+function keepContentLength(res) {
+  const end = res.end
+  const write = res.write
+  let streamed = false
+
+  res.write = function (...args) {
+    streamed = true
+    return write.apply(this, args)
+  }
+
+  res.end = function (chunk, encoding, callback) {
+    if (!streamed && !res.headersSent && chunk !== undefined && chunk !== null &&
+        typeof chunk !== 'function' && res.getHeader('Content-Length') === undefined) {
+      const enc = typeof encoding === 'string' ? encoding : 'utf8'
+      res.setHeader('Content-Length', Buffer.isBuffer(chunk) || chunk instanceof Uint8Array ? chunk.byteLength : Buffer.byteLength(String(chunk), enc))
+    }
+    return end.call(this, chunk, encoding, callback)
+  }
 }
 
 /**

@@ -142,6 +142,14 @@ export class QueryBuilder {
         continue
       }
 
+      // An undefined value is left out rather than written as NULL. Writing it
+      // meant `update({ token: req.body.token })` without a token cleared the
+      // column; left out, an insert gets the column's default and an update
+      // leaves it as it is. Pass null to write NULL.
+      if (value === undefined) {
+        continue
+      }
+
       filtered[key] = value
     }
 
@@ -268,6 +276,14 @@ export class QueryBuilder {
       operator = '='
     }
 
+    // Only a literal null means IS NULL. An undefined value is almost always
+    // a missing input — `where('reset_token', req.query.token)` with no token
+    // — and comparing it as null would match every row where the column is
+    // empty. On 0.8 it bound `= NULL` and matched nothing; now it is refused.
+    if (value === undefined) {
+      throw this._undefinedError(column)
+    }
+
     const col = this.grammar.escapeColumn(column)
     const op = this.grammar.validateOperator(String(operator))
 
@@ -275,7 +291,7 @@ export class QueryBuilder {
       return this._addIn(bool, column, value, op === 'NOT IN')
     }
 
-    if (value === null || value === undefined) {
+    if (value === null) {
       if (op === '=' || op === 'IS') {
         this._wheres.push({ type: 'null', bool, column: col, not: false })
       } else if (op === '!=' || op === '<>' || op === 'IS NOT') {
@@ -331,6 +347,9 @@ export class QueryBuilder {
     if (!Array.isArray(values)) {
       throw new Error(`${not ? 'NOT IN' : 'IN'} on ${column} needs an array of values`)
     }
+    if (values.some(v => v === undefined)) {
+      throw this._undefinedError(column)
+    }
     this._wheres.push({
       type: 'in',
       bool,
@@ -339,6 +358,15 @@ export class QueryBuilder {
       not
     })
     return this
+  }
+
+  _undefinedError(column) {
+    const err = new Error(
+      `where() on "${column}" was given undefined. Pass null to compare with IS NULL; ` +
+      'an undefined value is usually a missing input, and is refused rather than guessed at.'
+    )
+    err.code = 'UNDEFINED_VALUE'
+    return err
   }
 
   /**

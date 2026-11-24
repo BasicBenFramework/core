@@ -77,11 +77,11 @@ export function useSearchParams() {
     throw new Error('useSearchParams must be used within createClientApp')
   }
 
-  const { path, search, navigate } = context
+  const { path, search, hash, navigate } = context
   const params = useMemo(() => new URLSearchParams(search), [search])
   const setParams = useCallback((next, options = {}) => {
-    navigate(`${path}${nextSearch(next, new URLSearchParams(search))}`, options)
-  }, [path, search, navigate])
+    navigate(`${path}${nextSearch(next, new URLSearchParams(search))}${hash}`, options)
+  }, [path, search, hash, navigate])
 
   return [params, setParams]
 }

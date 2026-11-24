@@ -8,9 +8,12 @@
  *
  * Pattern syntax:
  * - `/posts/:id` — a param matches one non-empty segment, or part of one
- *   (`/feed/:name.xml`). Its value is URI-decoded.
+ *   (`/feed/:name.xml`). Its value is URI-decoded, except `%2F` and `%5C`,
+ *   which stay encoded so a param never carries a path separator.
  * - `/files/*` — a trailing `*` matches the rest of the path, including
- *   nothing; the value is `params._catchAll`, decoded.
+ *   nothing; the value is `params._catchAll`, decoded the same way. Its `/`
+ *   are the request's own separators; `..` segments never reach it, because
+ *   URL parsing resolves them first.
  * - `*` on its own matches every path.
  * - Everything else is literal: `.`, `(`, `+` and friends mean themselves.
  *

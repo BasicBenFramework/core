@@ -176,6 +176,7 @@ export class QueryBuilder {
      */
     orWhereIn(column: string, values: Array<any>): QueryBuilder;
     _addIn(bool: any, column: any, values: any, not: any): this;
+    _undefinedError(column: any): Error;
     /**
      * Add a WHERE NULL clause.
      *
