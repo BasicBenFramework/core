@@ -1,12 +1,14 @@
 /**
  * Create migrator instance
  *
- * @param {string} migrationsDir - Directory holding migration files
+ * @param {string|string[]} [migrationsDir] - Directory, or directories in the
+ *   order they run. Omitted, `migrations` in basicben.config.js, else
+ *   `db/migrations`.
  * @param {Object} [connection] - Adapter to use instead of the configured
  *   connection. Tests pass one in to exercise the Postgres dialect, which is
  *   where the bookkeeping SQL differs, without a Postgres server.
  */
-export function createMigrator(migrationsDir?: string, connection?: any): Promise<{
+export function createMigrator(migrationsDir?: string | string[], connection?: any): Promise<{
     /**
      * Run all pending migrations
      */

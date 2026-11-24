@@ -7,6 +7,7 @@ import { readdirSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { getDb } from './index.js'
+import { loadConfig } from '../server/loader.js'
 import { refuseLegacyLayout } from './layout.js'
 import { Grammar } from './Grammar.js'
 import { QueryBuilder } from './QueryBuilder.js'
@@ -40,19 +41,56 @@ function migrationsTable(db) {
   return new QueryBuilder(db, MIGRATIONS_TABLE, db.driver || 'sqlite')
 }
 
+const DEFAULT_DIR = 'db/migrations'
+
+/**
+ * The directories migrations come from, in the order they run.
+ *
+ * One directory, `db/migrations`, unless `basicben.config.js` names a list in
+ * `migrations`. A list is for an app whose schema ships in a package: the
+ * package's directory first, then the app's own. Names stay bare in
+ * `_migrations` whichever directory a file is in, so moving files between
+ * directories changes nothing recorded.
+ *
+ * @param {string|string[]|undefined} given
+ * @returns {Promise<string[]>} absolute paths
+ */
+async function migrationDirs(given) {
+  let dirs = given
+  if (dirs === undefined) {
+    const config = await loadConfig()
+    dirs = config.migrations ?? DEFAULT_DIR
+  }
+  if (!Array.isArray(dirs)) dirs = [dirs]
+  if (dirs.length === 0 || dirs.some(d => typeof d !== 'string' || d === '')) {
+    throw new Error('migrations must be a directory or a list of directories')
+  }
+
+  return dirs.map(d => {
+    const dir = resolve(process.cwd(), d)
+    // Only the default location has a legacy one to warn about.
+    if (d === DEFAULT_DIR) refuseLegacyLayout(dir, 'migrations', DEFAULT_DIR)
+    return dir
+  })
+}
+
 /**
  * Create migrator instance
  *
- * @param {string} migrationsDir - Directory holding migration files
+ * @param {string|string[]} [migrationsDir] - Directory, or directories in the
+ *   order they run. Omitted, `migrations` in basicben.config.js, else
+ *   `db/migrations`.
  * @param {Object} [connection] - Adapter to use instead of the configured
  *   connection. Tests pass one in to exercise the Postgres dialect, which is
  *   where the bookkeeping SQL differs, without a Postgres server.
  */
-export async function createMigrator(migrationsDir = 'db/migrations', connection = null) {
+export async function createMigrator(migrationsDir = undefined, connection = null) {
   const db = connection || await getDb()
-  const dir = resolve(process.cwd(), migrationsDir)
+  const dirs = await migrationDirs(migrationsDir)
 
-  refuseLegacyLayout(dir, 'migrations', 'db/migrations')
+  // A name in two directories would be ambiguous in _migrations, which records
+  // names only. Refused before anything runs.
+  getMigrationFiles(dirs)
 
   // Ensure migrations table exists
   await ensureMigrationsTable(db)
@@ -62,7 +100,7 @@ export async function createMigrator(migrationsDir = 'db/migrations', connection
      * Run all pending migrations
      */
     async migrate() {
-      const pending = await getPendingMigrations(db, dir)
+      const pending = await getPendingMigrations(db, dirs)
 
       if (pending.length === 0) {
         return { ran: [], message: 'Nothing to migrate.' }
@@ -112,7 +150,7 @@ export async function createMigrator(migrationsDir = 'db/migrations', connection
 
       // Roll back in reverse order
       for (const migration of migrations.reverse()) {
-        const filePath = findMigrationFile(dir, migration.migration)
+        const filePath = findMigrationFile(dirs, migration.migration)
 
         if (!filePath) {
           throw new Error(`Migration file not found: ${migration.migration}`)
@@ -182,7 +220,7 @@ export async function createMigrator(migrationsDir = 'db/migrations', connection
      * Get migration status
      */
     async status() {
-      const files = getMigrationFiles(dir)
+      const files = getMigrationFiles(dirs)
       const ran = await getRanMigrations(db)
       const ranSet = new Set(ran.map(m => m.migration))
 
@@ -244,27 +282,40 @@ async function ensureMigrationsTable(db) {
 }
 
 /**
- * Get list of migration files
+ * Migration files from each directory in turn, lexically within each.
+ *
+ * A missing directory is empty. A name found twice is an error naming both
+ * files: `_migrations` records names, not paths, so two files with one name
+ * could never be told apart again.
+ *
+ * @param {string[]} dirs - absolute paths
  */
-function getMigrationFiles(dir) {
-  if (!existsSync(dir)) {
-    return []
+function getMigrationFiles(dirs) {
+  const files = []
+  const seen = new Map()
+
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue
+
+    for (const f of readdirSync(dir).filter(isModuleFile).sort()) {
+      const file = { name: stripModuleExtension(f), path: join(dir, f) }
+      const other = seen.get(file.name)
+      if (other) {
+        throw new Error(`Two migrations are named ${file.name}:\n  ${other}\n  ${file.path}\nRename one; _migrations records names, not paths.`)
+      }
+      seen.set(file.name, file.path)
+      files.push(file)
+    }
   }
 
-  return readdirSync(dir)
-    .filter(isModuleFile)
-    .sort()
-    .map(f => ({
-      name: stripModuleExtension(f),
-      path: join(dir, f)
-    }))
+  return files
 }
 
 /**
  * Get migrations that haven't been run
  */
-async function getPendingMigrations(db, dir) {
-  const files = getMigrationFiles(dir)
+async function getPendingMigrations(db, dirs) {
+  const files = getMigrationFiles(dirs)
   const ran = await getRanMigrations(db)
   const ranSet = new Set(ran.map(m => m.migration))
 
@@ -335,10 +386,10 @@ async function loadMigration(filePath) {
 }
 
 /**
- * Find migration file by name
+ * Find migration file by name, in any of the directories
  */
-function findMigrationFile(dir, name) {
-  const files = getMigrationFiles(dir)
+function findMigrationFile(dirs, name) {
+  const files = getMigrationFiles(dirs)
   const match = files.find(f => f.name === name)
   return match?.path || null
 }
