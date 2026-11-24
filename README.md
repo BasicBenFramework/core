@@ -34,67 +34,48 @@ Most JS frameworks make one of two mistakes: they do too much (Next.js, Remix) o
 ## Quick Start
 
 ```bash
-npx @basicbenframework/create my-app
-cd my-app
+npx @basicbenframework/create my-site
+cd my-site
 npm install
-npx basicben migrate
-npx basicben dev
+npm run migrate
+npm run dev
 ```
 
-Your app is running at `http://localhost:3000` — a working CMS, not a starter
-skeleton: authentication with two-factor and passkeys, posts and pages,
+Your site is running at `http://localhost:3000`: a working CMS, not a starter
+skeleton. Authentication with two-factor and passkeys, posts and pages,
 categories, tags, comments, a media library, a headless content API, and an
 admin panel to manage them.
 
-Apps are TypeScript. Nothing forces you to annotate anything — Vite compiles
-the app either way — but the types are there when you want them, and the admin
-panel is written against them.
+The CMS is a package, `@basicbenframework/cms`, and the site holds only its
+own configuration and deploy files. Updating is
+`npm install @basicbenframework/cms@latest` and `npm run migrate`, not a merge.
+`--headless` makes a site with no public theme, for a front end elsewhere.
 
-### Local Development
-
-To develop against a local copy of the framework:
-
-```bash
-npx @basicbenframework/create my-app --local
-```
-
-This sets the `basicben` dependency to `file:../core` instead of fetching from npm.
+To change the CMS itself, fork
+[BasicBenFramework/basicben](https://github.com/BasicBenFramework/basicben).
 
 ---
 
 ## Project Structure
 
-A new BasicBen project looks like this:
+A new site looks like this:
 
 ```
-my-app/
-├── index.html               # Vite entry point
+my-site/
+├── basicben.config.js       # defineSite({ features, cors, mail, storage })
+├── vite.config.ts           # plugins: [cms()]
+├── index.html               # title and favicon
 ├── src/
-│   ├── main.tsx             # React entry point
-│   ├── routes/
-│   │   ├── App.tsx          # Client routes
-│   │   └── api/             # Auto-loaded API routes
-│   ├── controllers/         # Business logic
-│   ├── models/              # DB query wrappers
-│   ├── middleware/          # Route middleware
-│   ├── helpers/             # Utility functions
-│   ├── types/               # Shared type definitions
-│   ├── server/              # Server entry point
-│   └── client/              # React frontend
-│       ├── layouts/         # Layout components
-│       ├── pages/           # Page components, including admin/
-│       └── components/      # Reusable UI components
-├── db/
-│   ├── migrations/          # Database migrations
-│   └── seeds/               # Database seeders
-├── mail/                    # Email templates
-├── public/                  # Static assets
-├── tsconfig.json
-├── vite.config.ts
-└── basicben.config.js
+│   ├── server/index.ts      # the CMS's server
+│   ├── main.ts              # the CMS's admin
+│   └── types/               # for your own controllers
+├── vercel.json, api/        # Vercel (theme on; vercel.headless.json without)
+├── mail/                    # optional: replaces the CMS's template of that name
+└── db/migrations/           # optional: your own, after the CMS's
 ```
 
-Routes, middleware, and models are loaded automatically — no manual imports needed.
+`features` in `basicben.config.js` turns the CMS's features on: `analytics`,
+`members`, `mysendbox`, `theme`. An empty list is the bare core.
 
 ---
 

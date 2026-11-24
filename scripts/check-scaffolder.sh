@@ -8,9 +8,11 @@
 # run time now, which cannot go stale — but the downloading, the exclusions and
 # the renaming can still break, so they are checked here.
 #
-# This necessarily runs against the CMS repository's default branch, because
-# that is what the scaffolder targets. It needs network access; skip it with
-# SKIP_SCAFFOLDER=1.
+# It runs against what the scaffolder targets: the latest published
+# @basicbenframework/cms and the site/ template at that release's tag. It needs
+# network access; skip it with SKIP_SCAFFOLDER=1. To check an unreleased CMS,
+# set CREATE_BASICBEN_SOURCE to a checkout and CREATE_BASICBEN_CMS_VERSION to
+# the version it would publish.
 
 set -euo pipefail
 
@@ -34,13 +36,15 @@ if ! node "$ROOT_DIR/create/index.js" probe-app > "$WORK_DIR/create.log" 2>&1; t
   fail "the scaffolder could not create a project"
 fi
 
-# The repository's own files are not a project's.
-for LEAK in create .github PUBLISH.md package-lock.json; do
-  [ -e "probe-app/$LEAK" ] && fail "the scaffolder copied $LEAK into a project"
+# A site holds the template, not the CMS: its source comes from the package.
+for LEAK in src/models src/features db/migrations/001_create_users.js tests .github; do
+  [ -e "probe-app/$LEAK" ] && fail "the scaffolder copied the CMS's $LEAK into a site"
 done
 
 [ -f probe-app/.gitignore ] || fail "the scaffolder left gitignore undotted"
-[ -d probe-app/src/models ] || fail "the scaffolded project has no CMS source"
+for FILE in basicben.config.js vite.config.ts src/server/index.ts src/main.ts index.html vercel.json api/index.js; do
+  [ -f "probe-app/$FILE" ] || fail "the site has no $FILE"
+done
 
 grep -qE '^APP_KEY=[0-9a-f]{64}$' probe-app/.env \
   || fail "the scaffolder did not generate an APP_KEY"
@@ -49,12 +53,14 @@ node -e "
 const pkg = require('$WORK_DIR/probe-app/package.json')
 if (pkg.name !== 'probe-app') { console.error('name is ' + pkg.name); process.exit(1) }
 if (!pkg.dependencies['@basicbenframework/core']) { console.error('no core dependency'); process.exit(1) }
-" || fail "the scaffolded package.json was not rewritten for the project"
+const cms = pkg.dependencies['@basicbenframework/cms'] || ''
+if (!/^\\^\\d+\\.\\d+\\.\\d+/.test(cms)) { console.error('cms dependency is ' + cms); process.exit(1) }
+" || fail "the site's package.json was not rewritten: name, and the CMS release it installs"
 
-pass "the scaffolder produces a project, without the repository's own files"
+pass "the scaffolder produces a site that installs the CMS as a package"
 
 # A ref that does not exist should say so rather than produce a broken project.
-if node "$ROOT_DIR/create/index.js" bad-ref --ref no-such-ref > "$WORK_DIR/bad.log" 2>&1; then
+if env -u CREATE_BASICBEN_SOURCE node "$ROOT_DIR/create/index.js" bad-ref --ref no-such-ref > "$WORK_DIR/bad.log" 2>&1; then
   fail "the scaffolder accepted a ref that does not exist"
 fi
 grep -qi "no branch, tag or commit" "$WORK_DIR/bad.log" \

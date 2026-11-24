@@ -3,11 +3,16 @@
 /**
  * @basicbenframework/create
  *
- * Creates a new project from the BasicBen CMS.
+ * Creates a new site running the BasicBen CMS.
  *
  * Usage:
- *   npx @basicbenframework/create my-app
- *   npx @basicbenframework/create my-app --ref v0.5.1
+ *   npx @basicbenframework/create my-site
+ *   npx @basicbenframework/create my-site --headless
+ *
+ * A site installs the CMS as a package, @basicbenframework/cms, and holds only
+ * its own config and deploy files. Those come from the CMS repository's site/
+ * template, taken at the tag of the latest published CMS, so the template and
+ * the package it installs are always the same release.
  *
  * ## Why this downloads instead of bundling
  *
@@ -26,28 +31,22 @@
  * reachable — already true of the `npm install` that follows it.
  */
 
-import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, renameSync, readdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, renameSync, readdirSync, cpSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { tmpdir } from 'node:os'
 
 const REPO = 'BasicBenFramework/basicben'
+const PACKAGE = '@basicbenframework/cms'
+const REGISTRY = process.env.npm_config_registry?.replace(/\/$/, '') || 'https://registry.npmjs.org'
 
 /**
- * Paths that belong to the repository rather than to a project made from it.
- *
- * `create` is this package: a project does not contain its own scaffolder. The
- * rest is repository plumbing — CI, the release script, the end-to-end smoke
- * test — which a new project has no use for.
+ * For testing an unreleased CMS: a local checkout instead of the download,
+ * and the version to write into the site. Not for everyday use.
  */
-const NOT_YOURS = new Set([
-  'create',
-  '.github',
-  'PUBLISH.md',
-  'TESTING.md',
-  'package-lock.json'
-])
+const LOCAL_SOURCE = process.env.CREATE_BASICBEN_SOURCE
+const LOCAL_VERSION = process.env.CREATE_BASICBEN_CMS_VERSION
 
 const bold = (s) => `\x1b[1m${s}\x1b[0m`
 const green = (s) => `\x1b[32m${s}\x1b[0m`
@@ -77,12 +76,14 @@ async function main() {
     process.exit(1)
   }
 
-  // A branch, tag or commit. `main` is the current CMS; pin it if you would
-  // rather a new project not move when the repository does.
-  const refFlag = args.indexOf('--ref')
-  const ref = refFlag === -1 ? 'main' : args[refFlag + 1]
+  const headless = args.includes('--headless')
 
-  if (refFlag !== -1 && !ref) {
+  // A branch, tag or commit to take the template from. By default the tag of
+  // the latest published CMS, which is the package the site will install.
+  const refFlag = args.indexOf('--ref')
+  const givenRef = refFlag === -1 ? null : args[refFlag + 1]
+
+  if (refFlag !== -1 && (!givenRef || givenRef.startsWith('-'))) {
     console.error(`\n${red('Error:')} --ref needs a branch, tag or commit.\n`)
     process.exit(1)
   }
@@ -94,18 +95,28 @@ async function main() {
     process.exit(1)
   }
 
+  let version
+  try {
+    version = LOCAL_VERSION || (await latestVersion())
+  } catch (error) {
+    console.error(`\n${red('Error:')} ${error.message}\n`)
+    process.exit(1)
+  }
+  const ref = givenRef ?? `v${version}`
+
   console.log()
-  console.log(`${bold('Creating a new BasicBen app')} in ${cyan(projectDir)}`)
-  console.log(dim(`from ${REPO}@${ref}`))
+  console.log(`${bold('Creating a new BasicBen site')} in ${cyan(projectDir)}`)
+  console.log(dim(`${PACKAGE}@${version}, template from ${LOCAL_SOURCE ?? `${REPO}@${ref}`}${headless ? ', headless' : ''}`))
   console.log()
 
   const work = join(tmpdir(), `basicben-create-${randomBytes(6).toString('hex')}`)
   mkdirSync(work, { recursive: true })
 
   try {
-    await download(ref, work)
-    place(work, projectDir)
-    configure(projectDir, projectName)
+    const source = LOCAL_SOURCE ? resolve(LOCAL_SOURCE) : await download(ref, work)
+    place(source, projectDir, ref)
+    configure(projectDir, projectName, version)
+    if (headless) makeHeadless(projectDir)
   } catch (error) {
     // A half-written directory is worse than none: the next attempt would
     // refuse to run because the path already exists.
@@ -126,10 +137,26 @@ async function main() {
   console.log(`  ${cyan('npm run dev')}`)
   console.log()
   console.log(dim('The first account you register becomes the admin.'))
+  console.log(dim(`Update the CMS later with: npm install ${PACKAGE}@latest && npm run migrate`))
   console.log()
 }
 
-/** Fetch and unpack the repository at `ref`. */
+/** The latest published version of the CMS package. */
+async function latestVersion() {
+  let response
+  try {
+    response = await fetch(`${REGISTRY}/${PACKAGE.replace('/', '%2f')}/latest`)
+  } catch (error) {
+    throw new Error(`Could not reach the npm registry — ${error.message}`)
+  }
+  if (response.status === 404) throw new Error(`${PACKAGE} is not published yet.`)
+  if (!response.ok) throw new Error(`The npm registry returned ${response.status} for ${PACKAGE}.`)
+  const { version } = await response.json()
+  if (!version) throw new Error(`The npm registry gave no version for ${PACKAGE}.`)
+  return version
+}
+
+/** Fetch and unpack the repository at `ref`. Returns where it is. */
 async function download(ref, work) {
   const url = `https://codeload.github.com/${REPO}/tar.gz/${encodeURIComponent(ref)}`
 
@@ -161,17 +188,29 @@ async function download(ref, work) {
   } catch {
     throw new Error('Could not unpack the download — is `tar` on your PATH?')
   }
+
+  return unpacked
 }
 
-/** Move the repository into place, minus the parts that are not a project. */
-function place(work, projectDir) {
-  const source = join(work, 'src')
+/** Copy the repository's site/ template into place. */
+function place(source, projectDir, ref) {
+  const template = join(source, 'site')
+
+  // Releases before the CMS was a package have no template: they were the
+  // whole repository, copied. That route is a fork now.
+  if (!existsSync(join(template, 'package.json'))) {
+    throw new Error(
+      `${REPO}@${ref} has no site/ template: it is from before the CMS was a package. ` +
+        `For your own copy of the CMS, fork the repository instead.`
+    )
+  }
 
   mkdirSync(projectDir, { recursive: true })
 
-  for (const entry of readdirSync(source)) {
-    if (NOT_YOURS.has(entry)) continue
-    renameSync(join(source, entry), join(projectDir, entry))
+  for (const entry of readdirSync(template)) {
+    // A local checkout's template may have been run in place.
+    if (['node_modules', 'dist', '.env'].includes(entry) || /\.(db|sqlite)(-.*)?$/.test(entry)) continue
+    cpSync(join(template, entry), join(projectDir, entry), { recursive: true })
   }
 
   // The repository carries this undotted because npm strips dotfiles from
@@ -182,18 +221,19 @@ function place(work, projectDir) {
   if (existsSync(undotted)) renameSync(undotted, join(projectDir, '.gitignore'))
 }
 
-/** Name the project and give it an environment it can start with. */
-function configure(projectDir, projectName) {
+/** Name the site, pin its CMS, and give it an environment it can start with. */
+function configure(projectDir, projectName, version) {
   const pkgPath = join(projectDir, 'package.json')
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
 
-  // The repository's own package.json, renamed — not rebuilt from a list here.
-  // That list was a second copy of the scripts and dependencies, and it drifted
-  // from the real one exactly as you would expect a second copy to.
+  // The template's own package.json, renamed — not rebuilt from a list here.
+  // In the repository it installs the CMS from the checkout (file:..); a site
+  // installs the release its template came from.
   pkg.name = projectName
   pkg.version = '0.1.0'
   pkg.private = true
   delete pkg.description
+  pkg.dependencies = { ...pkg.dependencies, [PACKAGE]: `^${version}` }
 
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
 
@@ -208,26 +248,45 @@ function configure(projectDir, projectName) {
   )
 }
 
+/**
+ * The API and admin only, with no public theme: the headless Vercel file,
+ * and `theme` off. A front end elsewhere reads the content API.
+ */
+function makeHeadless(projectDir) {
+  const headless = join(projectDir, 'vercel.headless.json')
+  if (existsSync(headless)) renameSync(headless, join(projectDir, 'vercel.json'))
+
+  const configPath = join(projectDir, 'basicben.config.js')
+  const config = readFileSync(configPath, 'utf-8')
+  const next = config.replace(/^(\s*features: \[)([^\]]*)\]/m, (_, start, list) => {
+    const names = list.split(',').map((name) => name.trim()).filter((name) => name && name !== "'theme'")
+    return `${start}${names.join(', ')}]`
+  })
+  if (next === config) throw new Error('Could not turn the theme off: no features list in basicben.config.js.')
+  writeFileSync(configPath, next)
+}
+
 function showHelp() {
   console.log(`
 ${bold('create-basicben')} — start a project from the BasicBen CMS
 
 ${bold('Usage')}
-  ${cyan('npx @basicbenframework/create')} ${dim('<project-name>')}
+  ${cyan('npx @basicbenframework/create')} ${dim('<site-name>')}
 
 ${bold('Options')}
-  ${dim('--ref <ref>')}   branch, tag or commit to take (default: main)
+  ${dim('--headless')}    API and admin only: no public theme, headless vercel.json
+  ${dim('--ref <ref>')}   branch, tag or commit to take the template from
+                (default: the latest published CMS's tag)
   ${dim('--help')}        show this
 
 ${bold('What you get')}
-  The CMS from ${REPO}: posts, pages, media, an
-  admin UI and a headless content API. It is downloaded rather than bundled,
-  so it is never a stale copy.
+  A site running ${PACKAGE}: posts, pages, media, an admin UI and a
+  headless content API. The site holds its config and deploy files; the CMS
+  is a dependency, so updating it is ${cyan(`npm install ${PACKAGE}@latest`)}.
 
-  ${yellow('This is your project.')} It has no link back to the repository. To track
-  the CMS and pull fixes instead, fork it:
+  ${yellow('To change the CMS itself')}, fork it instead:
 
-    ${cyan(`git clone https://github.com/${REPO}.git my-app`)}
+    ${cyan(`git clone https://github.com/${REPO}.git`)}
 `)
 }
 
