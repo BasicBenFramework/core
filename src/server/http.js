@@ -6,13 +6,14 @@
  */
 
 import { createServer as createHttpServer } from 'node:http'
+import { compileRoute, parseQuery } from '../routing/match.js'
 
 /**
  * Create a minimal HTTP server instance
  */
 export function createApp(options = {}) {
   const middleware = []
-  const routes = new Map()  // method -> [{pattern, params, handlers}]
+  const routes = new Map()  // method -> [{path, matcher, handlers}]
   const onError = options.onError || defaultErrorHandler
   const onNoMatch = options.onNoMatch || defaultNotFoundHandler
 
@@ -38,62 +39,31 @@ export function createApp(options = {}) {
    * Register a route
    */
   function addRoute(method, path, ...handlers) {
-    const { pattern, paramNames } = pathToPattern(path)
     routes.get(method.toUpperCase()).push({
       path,
-      pattern,
-      paramNames,
+      matcher: compileRoute(path),
       handlers
     })
     return app
   }
 
   /**
-   * Convert path with params to regex
-   * /users/:id -> /^\/users\/([^/]+)$/
-   */
-  function pathToPattern(path) {
-    const paramNames = []
-
-    let pattern = path
-      // Handle catch-all
-      .replace(/\/\*$/, '/(?<_catchAll>.*)')
-      // Handle :params
-      .replace(/:(\w+)/g, (_, name) => {
-        paramNames.push(name)
-        return '([^/]+)'
-      })
-      // Escape slashes
-      .replace(/\//g, '\\/')
-
-    return {
-      pattern: new RegExp(`^${pattern}$`),
-      paramNames
-    }
-  }
-
-  /**
-   * Match a request to a route
+   * Match a request to a route: the first registered for the method, in
+   * order. A HEAD request with no HEAD route of its own runs the GET route;
+   * Node sends no body for HEAD, so only the headers go out.
    */
   function matchRoute(method, pathname) {
-    const routeList = routes.get(method.toUpperCase()) || []
+    const upper = method.toUpperCase()
+    const found = findRoute(upper, pathname)
+    if (found || upper !== 'HEAD') return found
+    return findRoute('GET', pathname)
+  }
 
-    for (const route of routeList) {
-      const match = pathname.match(route.pattern)
-      if (match) {
-        // Extract params
-        const params = {}
-        route.paramNames.forEach((name, i) => {
-          params[name] = match[i + 1]
-        })
-        // Handle catch-all
-        if (match.groups?._catchAll !== undefined) {
-          params._catchAll = match.groups._catchAll
-        }
-        return { route, params }
-      }
+  function findRoute(method, pathname) {
+    for (const route of routes.get(method) || []) {
+      const params = route.matcher.match(pathname)
+      if (params) return { route, params }
     }
-
     return null
   }
 
@@ -158,11 +128,17 @@ export function createApp(options = {}) {
     // Parse URL using WHATWG URL API
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
     req.path = url.pathname || '/'
-    req.query = Object.fromEntries(url.searchParams)
+    req.query = parseQuery(url.searchParams)
     req.params = {}
 
-    // Find matching route
-    const matched = matchRoute(req.method, req.path)
+    // Find matching route. A param that is not valid percent-encoding is the
+    // client's error, answered 400 through the error handler.
+    let matched
+    try {
+      matched = matchRoute(req.method, req.path)
+    } catch (err) {
+      return runMiddleware([...middleware, () => { throw err }], req, res)
+    }
 
     if (matched) {
       req.params = matched.params

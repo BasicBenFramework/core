@@ -7,7 +7,12 @@
  * - Per-route middleware
  * - Named routes for URL generation
  * - Parameter parsing
+ *
+ * Paths match through ../routing/match.js, the same matcher the HTTP app and
+ * the client router use.
  */
+
+import { compileRoute, normalizePath } from '../routing/match.js'
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
 
@@ -43,10 +48,12 @@ export class Router {
       routeMiddleware.push(arg)
     }
 
+    const matcher = compileRoute(fullPath)
     const route = {
       method: method.toUpperCase(),
       path: fullPath,
-      pattern: this.#pathToPattern(fullPath),
+      pattern: matcher.regex,
+      matcher,
       middleware: [...this.middleware, ...routeMiddleware],
       handler: mainHandler,
       name
@@ -65,24 +72,7 @@ export class Router {
    * Normalize path - ensure leading slash, no trailing slash
    */
   #normalizePath(path) {
-    if (!path || path === '/') return '/'
-    let normalized = path.startsWith('/') ? path : '/' + path
-    return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized
-  }
-
-  /**
-   * Convert path to regex pattern for matching
-   */
-  #pathToPattern(path) {
-    // Convert :param to named capture groups
-    // /users/:id -> /users/(?<id>[^/]+)
-    // Also handle catch-all: /* -> /(.*)
-    let pattern = path
-      .replace(/\/\*$/, '/(?<_catchAll>.*)')  // Catch-all at end
-      .replace(/\/:(\w+)/g, '/(?<$1>[^/]+)')
-      .replace(/\//g, '\\/')
-
-    return new RegExp(`^${pattern}$`)
+    return normalizePath(path)
   }
 
   /**
@@ -175,33 +165,29 @@ export class Router {
       throw new Error(`Route '${name}' not found`)
     }
 
-    let path = route.path
-    for (const [key, value] of Object.entries(params)) {
-      path = path.replace(`:${key}`, String(value))
-    }
-
-    return path
+    // Encoded, so a value with a slash or a space still round-trips through
+    // the matcher, which decodes it.
+    return route.path.replace(/:(\w+)/g, (whole, key) =>
+      Object.hasOwn(params, key) ? encodeURIComponent(String(params[key])) : whole
+    )
   }
 
   /**
    * Match a request to a route
    */
   match(method, path) {
-    const normalizedPath = this.#normalizePath(path)
-
-    for (const route of this.routes) {
-      if (route.method !== method.toUpperCase()) continue
-
-      const match = normalizedPath.match(route.pattern)
-      if (match) {
-        return {
-          route,
-          params: match.groups || {}
-        }
+    const upper = method.toUpperCase()
+    const find = (m) => {
+      for (const route of this.routes) {
+        if (route.method !== m) continue
+        const params = route.matcher.match(path)
+        if (params) return { route, params }
       }
+      return null
     }
 
-    return null
+    // HEAD falls back to GET, as it does in the HTTP app.
+    return find(upper) ?? (upper === 'HEAD' ? find('GET') : null)
   }
 
   /**
