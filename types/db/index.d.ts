@@ -75,6 +75,6 @@ export namespace db {
      */
     function table(table: string): Promise<QueryBuilder>;
 }
-export { QueryBuilder } from "./QueryBuilder.js";
 export { Grammar } from "./Grammar.js";
 import { QueryBuilder } from './QueryBuilder.js';
+export { QueryBuilder, escapeLike } from "./QueryBuilder.js";

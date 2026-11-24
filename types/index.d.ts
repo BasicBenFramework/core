@@ -1,6 +1,6 @@
 /** @type {string} */
 export const VERSION: string;
-export { db, query, getDb, QueryBuilder, Grammar } from "./db/index.js";
+export { db, query, getDb, QueryBuilder, Grammar, escapeLike } from "./db/index.js";
 export { hooks, HookManager, HOOKS } from "./hooks/index.js";
 export { parseVersion, compareVersions, isNewer, isOlder, isEqual, satisfies, getChannel, incrementVersion } from "./version.js";
 export { createLimiter, rateLimit, parseDuration, clientAddress, MemoryStore, DatabaseStore } from "./server/rate-limit.js";

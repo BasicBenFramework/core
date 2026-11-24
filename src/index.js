@@ -8,7 +8,7 @@ import pkg from '../package.json' with { type: 'json' }
 export const VERSION = pkg.version
 
 // Database
-export { db, query, getDb, QueryBuilder, Grammar } from './db/index.js'
+export { db, query, getDb, QueryBuilder, Grammar, escapeLike } from './db/index.js'
 
 // Hooks
 export { hooks, HookManager, HOOKS } from './hooks/index.js'

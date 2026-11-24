@@ -217,6 +217,7 @@ basicben migrate                   # Run all pending migrations
 basicben migrate:rollback          # Roll back the last batch
 basicben migrate:fresh             # Drop everything and re-run all
 basicben migrate:status            # Show which migrations have run
+basicben migrate:unlock            # Clear a lock left by a crashed migrate (not needed on Postgres)
 
 # Content
 basicben content:rerender          # Rebuild stored HTML from the Markdown source
@@ -251,6 +252,26 @@ export default (router) => {
 
 All files in `src/routes/api/` are registered automatically on startup.
 
+The server, the `Router` and the client router share one matcher, so a pattern
+means the same thing everywhere:
+
+- **Params** (`/users/:id`, or part of a segment: `/feed/:name.xml`) match one
+  segment and arrive URI-decoded: `/tags/caf%C3%A9` gives `req.params.tag === 'café'`.
+  A malformed escape is answered `400`.
+- **Literals are literal.** The `.` in `/feed.xml` matches only a dot.
+- **Trailing slashes don't matter.** `/about/` matches `/about`, and so does the reverse.
+- **A trailing `*`** (`/files/*`) matches the rest of the path, including
+  nothing, as `req.params._catchAll`.
+- **HEAD** runs the GET route when there is no HEAD route of its own. Node sends
+  the headers and drops the body.
+- **`req.query`** keeps repeated keys: `?tag=a&tag=b` is `{ tag: ['a', 'b'] }`,
+  and a key given once is a plain string. Check with `typeof` before calling
+  string methods.
+
+Before 0.9.0, production used a weaker matcher than `Router.match`. It had no
+trailing-slash handling, no escaping and no decoding; it kept only the last of
+a repeated query key; and HEAD got a 404.
+
 ### Client Routes
 
 Client-side routing is configured in `src/routes/App.jsx`:
@@ -273,7 +294,45 @@ export default createClientApp({
 
 Route values are either a component or `{ component, auth, guest, layout }`.
 `auth: true` redirects to `/login` when signed out; `guest: true` redirects to `/`
-when signed in; `layout` overrides the default for that route.
+when signed in; `layout` overrides the default for that route. The redirect
+happens in an effect after render, never during it.
+
+The signed-in user is read on load from `/api/user` (with the stored bearer
+token), and logout POSTs `/api/auth/logout`. All four paths are config:
+
+```js
+export default createClientApp({
+  routes: { /* ... */ },
+  authEndpoint: '/api/me',          // false: no check; nobody is signed in until setUser()
+  logoutEndpoint: '/api/session/end', // false: don't tell the server
+  loginPath: '/signin',             // where auth routes send signed-out visitors
+  homePath: '/dashboard'            // where guest routes send signed-in ones
+})
+```
+
+Navigate with `Link`, which renders a real `<a href>`, so it still opens in a
+new tab on a modified click. `navigate()` takes a query string and hash too.
+
+```js
+import { Link, useNavigate, useSearchParams } from '@basicbenframework/core/client'
+
+function Posts() {
+  const [params, setParams] = useSearchParams()
+  const page = Number(params.get('page') ?? 1)
+
+  return (
+    <>
+      <Link to="/posts/new" className="button">New post</Link>
+      <button onClick={() => setParams({ page: page + 1, tag: params.getAll('tag') })}>Next</button>
+    </>
+  )
+}
+```
+
+`setParams` takes an object (an array repeats the key; null drops it), a string,
+a `URLSearchParams`, or a function of the current params. It keeps the path,
+and `{ replace: true }` replaces the history entry. `usePath()` is the pathname
+alone, and `useSearch()` is the raw `?…` string.
 
 Two optional components round out the app shell:
 
@@ -440,7 +499,9 @@ Generate one with:
 basicben make:model User
 ```
 
-Models are thin wrappers around raw DB queries — no ORM, no magic.
+Models are thin wrappers around raw DB queries — no ORM, no magic. The
+generated model uses the [query builder](#query-builder) and a `fillable` list;
+raw SQL works just as well:
 
 ```js
 // src/models/User.js
@@ -454,6 +515,54 @@ export const User = {
   destroy: (id) => db.run(`DELETE FROM users WHERE id = ?`, id)
 }
 ```
+
+### Query builder
+
+`db.table(name)` (or `query(name)`) returns a builder that escapes every
+identifier and binds every value:
+
+```js
+import { db, escapeLike } from '@basicbenframework/core/db'
+
+const posts = await (await db.table('posts'))
+  .select('posts.id', 'posts.title', 'users.name as author')
+  .join('users', 'posts.user_id', 'users.id')      // leftJoin() too
+  .where('posts.status', 'published')
+  .where('posts.deleted_at', null)                  // IS NULL; '!=' null is IS NOT NULL
+  .whereIn('posts.category_id', [1, 2, 3])          // [] matches nothing
+  .where(q => q.where('posts.featured', 1).orWhere('posts.title', 'LIKE', `%${escapeLike(term)}%`))
+  .orderBy('posts.published_at', 'DESC')
+  .paginate(req.query.page, req.query.perPage)      // junk input falls back to page 1, 15 per page
+```
+
+- `orWhere`, `orWhereIn`, `orWhereNull` and `orWhereNotNull` join with OR. AND
+  binds tighter, as in SQL. Pass a callback to group.
+- **LIKE ignores case on every dialect**, written as
+  `LOWER(col) LIKE LOWER(?) ESCAPE '\'`. `escapeLike()` makes `%`, `_` and `\`
+  in user input literal. SQLite and Turso fold ASCII only. Wrapping the column
+  in `LOWER()` also stops a plain index on it from being used.
+- `update()` and `delete()` refuse a join.
+
+#### Mass assignment
+
+**Inserts and updates must name their columns.** Since 0.9.0 a write without
+`only()` or `unguarded()` throws an error with `code: 'MASS_ASSIGNMENT'`:
+
+```js
+const users = await db.table('users')
+
+await users.insert(req.body)                                   // throws
+await users.only('name', 'email').insert(req.body)             // writes name and email, drops the rest
+await users.only(User.fillable).where('id', id).update(req.body)
+await users.unguarded().insert({ name, email, role: 'admin' }) // every key but id
+```
+
+- `only()` takes names or an array (a model's `fillable` list). Keys of the
+  data outside it are dropped.
+- `unguarded()` is the pre-0.9 behaviour: every key is written except guarded
+  ones (`id`, or whatever `except()` lists). Use it for objects the code built
+  itself, never for a request body.
+- `except()` on its own no longer permits a write.
 
 ---
 
@@ -492,6 +601,37 @@ basicben migrate
 ```
 
 BasicBen tracks which migrations have run in a `_migrations` table. Running `migrate` again is always safe.
+
+Each migration runs in a transaction together with the row that records it, so
+a failure halfway leaves the schema as it was. Some statements refuse to run in
+a transaction: Postgres's `CREATE INDEX CONCURRENTLY` and `VACUUM`, and SQLite's
+`PRAGMA foreign_keys`, which is ignored there. A migration that needs one opts
+out:
+
+```js
+export const transaction = false
+
+export const up = (db) => db.exec('CREATE INDEX CONCURRENTLY IF NOT EXISTS posts_slug ON posts (slug)')
+export const down = (db) => db.exec('DROP INDEX CONCURRENTLY IF EXISTS posts_slug')
+```
+
+Nothing is undone if it fails, so write it to be safe to run twice.
+
+### Concurrent runs
+
+`migrate`, `migrate:rollback` and `migrate:fresh` hold a lock, so two replicas
+deploying at once can't both apply a migration. The second waits for the
+first, up to 10 minutes, and then finds nothing left to do.
+
+- **Postgres:** a session advisory lock. The server releases it if the process
+  dies. It holds one pooled connection while migrations run on others, so the
+  pool needs at least two.
+- **SQLite and Turso:** a row in `_migrations_lock`. A run that crashes leaves the
+  row behind; the next run times out with a message naming the holder, and
+  `basicben migrate:unlock` clears it.
+
+`createMigrator(dirs, connection, { lockTimeout, lock: false })` changes the
+wait, or turns the lock off.
 
 ### Rolling back
 

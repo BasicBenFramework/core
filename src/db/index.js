@@ -198,5 +198,5 @@ export async function query(table) {
 }
 
 // Re-export QueryBuilder and Grammar for advanced usage
-export { QueryBuilder } from './QueryBuilder.js'
+export { QueryBuilder, escapeLike } from './QueryBuilder.js'
 export { Grammar } from './Grammar.js'
