@@ -14,7 +14,17 @@
  * @param {object} config
  * @param {Record<string, RouteDefinition>} config.routes - Route definitions { path: Component | { component, auth?, guest?, layout? } }
  * @param {import('react').ComponentType<any>} [config.layout] - Default layout wrapper
- * @param {(path: string) => Promise<any>} [config.api] - API function for auth check (default: fetch /api/user)
+ * @param {(path: string) => Promise<any>} [config.api] - API function for the auth check; called
+ *   with `authEndpoint`, resolves to `{ user }` (default: fetch with the stored bearer token)
+ * @param {string | false} [config.authEndpoint] - Where the signed-in user is read from on
+ *   load (default `/api/user`). `false` skips the check: nobody is signed in until
+ *   `setUser` says so.
+ * @param {string | false} [config.logoutEndpoint] - POSTed on logout so the server can end
+ *   the session (default `/api/auth/logout`); `false` skips it
+ * @param {string} [config.loginPath] - Where an `auth` route sends a signed-out visitor
+ *   (default `/login`)
+ * @param {string} [config.homePath] - Where a `guest` route sends a signed-in visitor
+ *   (default `/`)
  * @param {import('react').ComponentType<any>} [config.Loading] - Loading component
  * @param {import('react').ComponentType<any>} [config.NotFound] - Component rendered when no route matches.
  *   Receives no props and is wrapped in the default layout, so an unmatched path
@@ -29,6 +39,10 @@ export function createClientApp(config: {
     routes: Record<string, RouteDefinition>;
     layout?: import("react").ComponentType<any>;
     api?: (path: string) => Promise<any>;
+    authEndpoint?: string | false;
+    logoutEndpoint?: string | false;
+    loginPath?: string;
+    homePath?: string;
     Loading?: import("react").ComponentType<any>;
     NotFound?: import("react").ComponentType<any>;
     provider?: import("react").ComponentType<{

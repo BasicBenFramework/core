@@ -70,6 +70,40 @@ export class Grammar {
      */
     escapeId(name: string): string;
     /**
+     * Escape a column that may be qualified with its table: `title` or
+     * `posts.title`. Each part is validated on its own.
+     *
+     * @param {string} name
+     * @param {{ allowStar?: boolean }} [options] - accept `posts.*`
+     * @returns {string}
+     */
+    escapeColumn(name: string, options?: {
+        allowStar?: boolean;
+    }): string;
+    /**
+     * Escape a SELECT list entry: `*`, a column, `table.*`, or any of those
+     * but `*` followed by `as alias`.
+     *
+     * @param {string} entry
+     * @returns {string}
+     */
+    escapeSelectColumn(entry: string): string;
+    /**
+     * Escape a table reference for a JOIN: `users` or `users as u`.
+     *
+     * @param {string} entry
+     * @returns {string}
+     */
+    escapeTable(entry: string): string;
+    /**
+     * The ESCAPE clause's operand for LIKE: a single backslash, spelled as a
+     * string literal in this dialect. MySQL treats backslash as an escape inside
+     * string literals, so it needs two.
+     *
+     * @returns {string}
+     */
+    likeEscape(): string;
+    /**
      * Get the placeholder syntax for the current driver.
      *
      * @param {number} index - Zero-based parameter index

@@ -27,7 +27,51 @@ export function useNavigate(): (to: string, options?: {
  */
 export function useParams(): Record<string, string>;
 /**
- * Get current path
+ * Get current path, without the query string or hash
  * @returns {string} current pathname
  */
 export function usePath(): string;
+/**
+ * The query string, and a setter that navigates to a new one.
+ *
+ * The setter takes a URLSearchParams, a string, an object (an array value
+ * repeats the key; null and undefined drop it), or a function of the current
+ * params. The path and hash stay; `{ replace: true }` replaces the history
+ * entry instead of adding one.
+ *
+ * @example
+ * const [params, setParams] = useSearchParams()
+ * const page = Number(params.get('page') ?? 1)
+ * setParams(prev => { prev.set('page', String(page + 1)); return prev })
+ *
+ * @returns {[URLSearchParams, (next: URLSearchParams | string | Record<string, any> | ((prev: URLSearchParams) => any), options?: { replace?: boolean }) => void]}
+ */
+export function useSearchParams(): [URLSearchParams, (next: URLSearchParams | string | Record<string, any> | ((prev: URLSearchParams) => any), options?: {
+    replace?: boolean;
+}) => void];
+/**
+ * Get the current query string
+ * @returns {string} `?a=1`, or ''
+ */
+export function useSearch(): string;
+/**
+ * A link that navigates through the client router.
+ *
+ * Renders a real `<a href>`, so it can be opened in a new tab, copied and
+ * crawled. A plain left click on a same-origin link navigates without a page
+ * load; modified clicks, `target` other than `_self`, `download` and other
+ * origins are left to the browser. An `onClick` that calls preventDefault()
+ * stops the navigation.
+ *
+ * @param {{ to: string, replace?: boolean, onClick?: (event: any) => void, children?: any, [prop: string]: any }} props
+ */
+export function Link({ to, replace, onClick, children, ...rest }: {
+    to: string;
+    replace?: boolean;
+    onClick?: (event: any) => void;
+    children?: any;
+    [prop: string]: any;
+}): import("react").DetailedReactHTMLElement<{
+    href: string;
+    onClick: (event: any) => void;
+}, HTMLElement>;

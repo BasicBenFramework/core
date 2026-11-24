@@ -71,6 +71,10 @@ export const commandMeta: {
         description: string;
         usage: string;
     };
+    'migrate:unlock': {
+        description: string;
+        usage: string;
+    };
     'content:rerender': {
         description: string;
         usage: string;

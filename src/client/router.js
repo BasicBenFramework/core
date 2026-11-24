@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, createElement } from 'react'
+import { useState, useEffect, useCallback, useMemo, createElement } from 'react'
 import { RouterContext, AuthContext } from './context.js'
+import { createMatcher, resolveLocation, locationPath, guardRedirect } from './location.js'
 
 /**
  * A route entry: either the component itself, or the component plus its guards.
@@ -18,7 +19,17 @@ import { RouterContext, AuthContext } from './context.js'
  * @param {object} config
  * @param {Record<string, RouteDefinition>} config.routes - Route definitions { path: Component | { component, auth?, guest?, layout? } }
  * @param {import('react').ComponentType<any>} [config.layout] - Default layout wrapper
- * @param {(path: string) => Promise<any>} [config.api] - API function for auth check (default: fetch /api/user)
+ * @param {(path: string) => Promise<any>} [config.api] - API function for the auth check; called
+ *   with `authEndpoint`, resolves to `{ user }` (default: fetch with the stored bearer token)
+ * @param {string | false} [config.authEndpoint] - Where the signed-in user is read from on
+ *   load (default `/api/user`). `false` skips the check: nobody is signed in until
+ *   `setUser` says so.
+ * @param {string | false} [config.logoutEndpoint] - POSTed on logout so the server can end
+ *   the session (default `/api/auth/logout`); `false` skips it
+ * @param {string} [config.loginPath] - Where an `auth` route sends a signed-out visitor
+ *   (default `/login`)
+ * @param {string} [config.homePath] - Where a `guest` route sends a signed-in visitor
+ *   (default `/`)
  * @param {import('react').ComponentType<any>} [config.Loading] - Loading component
  * @param {import('react').ComponentType<any>} [config.NotFound] - Component rendered when no route matches.
  *   Receives no props and is wrapped in the default layout, so an unmatched path
@@ -30,14 +41,24 @@ import { RouterContext, AuthContext } from './context.js'
  * @returns {import('react').FunctionComponent} React component
  */
 export function createClientApp(config) {
-  const { routes, layout: DefaultLayout, api, Loading, NotFound, provider: Provider } = config
+  const {
+    routes,
+    layout: DefaultLayout,
+    api,
+    Loading,
+    NotFound,
+    provider: Provider,
+    authEndpoint = '/api/user',
+    logoutEndpoint = '/api/auth/logout',
+    loginPath = '/login',
+    homePath = '/'
+  } = config
 
   // Normalize routes to consistent format
   const normalizedRoutes = Object.entries(routes).map(([path, value]) => {
     const isSimple = typeof value === 'function'
     return {
       path,
-      pattern: pathToRegex(path),
       component: isSimple ? value : value.component,
       auth: isSimple ? false : value.auth || false,
       guest: isSimple ? false : value.guest || false,
@@ -45,35 +66,51 @@ export function createClientApp(config) {
     }
   })
 
+  // The same matcher the server uses: trailing slashes, literal dots and
+  // decoded params all behave alike on both sides.
+  const matchRoute = createMatcher(normalizedRoutes)
+
+  const currentLocation = () => ({
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash
+  })
+
+  const hasToken = () => {
+    try {
+      return Boolean(localStorage.getItem('token'))
+    } catch {
+      return false
+    }
+  }
+
   function App() {
     const [user, setUser] = useState(null)
-    const [loading, setLoading] = useState(true)
-    const [path, setPath] = useState(window.location.pathname)
+    // Only waiting when there is something to check: signed out, the first
+    // render is the real one, not a Loading flash.
+    const [loading, setLoading] = useState(() => authEndpoint !== false && hasToken())
+    const [location, setLocation] = useState(currentLocation)
 
-    // Match current route
-    const matchRoute = useCallback((pathname) => {
-      for (const route of normalizedRoutes) {
-        const match = pathname.match(route.pattern)
-        if (match) {
-          const routeParams = extractParams(route.path, match)
-          return { route, params: routeParams }
-        }
-      }
-      return null
-    }, [])
-
-    // Navigate function
+    // Navigate function. Takes a path with or without a query string and
+    // hash, or a full URL; another origin is a full page load.
     const navigate = useCallback((to, options = {}) => {
       const { replace = false } = options
+      const next = resolveLocation(to, window.location.href)
 
-      if (replace) {
-        window.history.replaceState({}, '', to)
-      } else {
-        window.history.pushState({}, '', to)
+      if (next.origin !== window.location.origin) {
+        window.location.assign(next.href)
+        return
       }
 
-      setPath(to)
-      window.scrollTo(0, 0)
+      const target = locationPath(next)
+      if (replace) {
+        window.history.replaceState({}, '', target)
+      } else {
+        window.history.pushState({}, '', target)
+      }
+
+      setLocation({ pathname: next.pathname, search: next.search, hash: next.hash })
+      if (!next.hash) window.scrollTo(0, 0)
     }, [])
 
     // Logout function
@@ -83,8 +120,8 @@ export function createClientApp(config) {
       // expires. Fire-and-forget: signing out locally must not wait on, or
       // fail with, the network.
       const token = localStorage.getItem('token')
-      if (token) {
-        fetch('/api/auth/logout', {
+      if (token && logoutEndpoint !== false) {
+        fetch(logoutEndpoint, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           keepalive: true
@@ -92,19 +129,18 @@ export function createClientApp(config) {
       }
       localStorage.removeItem('token')
       setUser(null)
-      navigate('/')
+      navigate(homePath)
     }, [navigate])
 
     // Auth check on mount
     useEffect(() => {
-      const token = localStorage.getItem('token')
-      if (!token) {
+      if (authEndpoint === false || !hasToken()) {
         setLoading(false)
         return
       }
 
       const checkAuth = api || defaultApi
-      checkAuth('/api/user')
+      checkAuth(authEndpoint)
         .then(data => setUser(data.user))
         .catch(() => localStorage.removeItem('token'))
         .finally(() => setLoading(false))
@@ -113,11 +149,31 @@ export function createClientApp(config) {
     // Handle browser back/forward
     useEffect(() => {
       const handlePopState = () => {
-        setPath(window.location.pathname)
+        setLocation(currentLocation())
       }
       window.addEventListener('popstate', handlePopState)
       return () => window.removeEventListener('popstate', handlePopState)
     }, [])
+
+    // Find matching route
+    const matched = matchRoute(location.pathname)
+
+    // A guard decides during render but redirects after it. Navigating from
+    // render updated state mid-render, which React warns about and which runs
+    // twice under StrictMode.
+    const redirect = !loading && matched ? guardRedirect(matched.route, user, { loginPath, homePath }) : null
+
+    useEffect(() => {
+      if (redirect) navigate(redirect, { replace: true })
+    }, [redirect, navigate])
+
+    const routerValue = useMemo(() => ({
+      path: location.pathname,
+      search: location.search,
+      hash: location.hash,
+      params: matched?.params ?? {},
+      navigate
+    }), [location, matched?.route, navigate])
 
     // Loading state
     if (loading) {
@@ -127,11 +183,7 @@ export function createClientApp(config) {
       }, 'Loading...')
     }
 
-    // Find matching route
-    const matched = matchRoute(path)
-
     let wrapped
-    let params = {}
 
     if (!matched) {
       if (!NotFound) {
@@ -144,19 +196,10 @@ export function createClientApp(config) {
         wrapped = createElement(DefaultLayout, null, wrapped)
       }
     } else {
-      const { route, params: routeParams } = matched
-      params = routeParams
+      // Redirecting: render nothing until the effect above has moved on.
+      if (redirect) return null
 
-      // Route guards
-      if (route.auth && !user) {
-        navigate('/login', { replace: true })
-        return null
-      }
-      if (route.guest && user) {
-        navigate('/', { replace: true })
-        return null
-      }
-
+      const { route } = matched
       wrapped = createElement(route.component)
 
       // Route-specific layout replaces the default
@@ -172,7 +215,7 @@ export function createClientApp(config) {
       { value: { user, setUser, logout, loading } },
       createElement(
         RouterContext.Provider,
-        { value: { path, params, navigate } },
+        { value: routerValue },
         wrapped
       )
     )
@@ -185,35 +228,6 @@ export function createClientApp(config) {
   }
 
   return App
-}
-
-/**
- * Convert route path to regex
- * /posts/:id -> /^\/posts\/([^/]+)$/
- */
-function pathToRegex(path) {
-  if (path === '*') return /^.*$/
-
-  const pattern = path
-    .replace(/\*/g, '.*')
-    .replace(/:(\w+)/g, '([^/]+)')
-    .replace(/\//g, '\\/')
-
-  return new RegExp(`^${pattern}$`)
-}
-
-/**
- * Extract params from match
- */
-function extractParams(path, match) {
-  const params = {}
-  const paramNames = path.match(/:(\w+)/g) || []
-
-  paramNames.forEach((name, i) => {
-    params[name.slice(1)] = match[i + 1]
-  })
-
-  return params
 }
 
 /**
