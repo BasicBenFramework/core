@@ -99,9 +99,19 @@ function getJsFiles(dir, files = []) {
 }
 
 /**
- * Load config file if it exists
+ * Load basicben.config.js (or .mjs) from the project root.
  *
- * @returns {Object} - Config object or empty defaults
+ * No file means defaults: `{}`. A file that exists but fails to load is an
+ * error, thrown with the file's name and the reason. It used to be logged and
+ * replaced by `{}`, so a typo ran the app on defaults (no CORS allowlist, the
+ * console mail transport, the default migrations directory) with nothing
+ * failing. A config is also where an app lists what it runs, so losing it
+ * silently is the worse failure.
+ *
+ * A config whose default export is a promise is awaited.
+ *
+ * @returns {Promise<Object>} the config, or `{}` when there is no file
+ * @throws {Error} when the file exists and cannot be imported
  */
 export async function loadConfig() {
   const configPaths = [
@@ -111,18 +121,15 @@ export async function loadConfig() {
 
   for (const configPath of configPaths) {
     const fullPath = resolve(process.cwd(), configPath)
+    if (!existsSync(fullPath)) continue
 
-    if (existsSync(fullPath)) {
-      try {
-        const fileUrl = pathToFileURL(fullPath).href
-        const module = await import(fileUrl)
-        return module.default || {}
-      } catch (err) {
-        console.error(`\x1b[31mError loading config:\x1b[0m ${configPath}`)
-        console.error(`  ${err.message}`)
-        console.error(`\x1b[2mCheck your config file syntax.\x1b[0m\n`)
-      }
+    let module
+    try {
+      module = await import(pathToFileURL(fullPath).href)
+    } catch (err) {
+      throw new Error(`Could not load ${configPath}: ${err.message}`, { cause: err })
     }
+    return (await module.default) || {}
   }
 
   return {}
