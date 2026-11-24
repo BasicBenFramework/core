@@ -5,6 +5,7 @@
 
 import { test, describe } from 'node:test'
 import assert from 'node:assert'
+import { readFileSync } from 'node:fs'
 import { claimCopy } from './one-copy.js'
 
 const A = 'file:///app/node_modules/@basicbenframework/core/src/one-copy.js'
@@ -45,5 +46,15 @@ describe('claimCopy', () => {
     await import('./db/index.js')
     const record = globalThis[Symbol.for('basicben.core')]
     assert.ok(record.at.endsWith('/src'))
+  })
+
+  test('runs in a browser: no node: imports, and http URLs work', () => {
+    // The admin bundles the hook registry, and with it this file. 0.8.0
+    // imported node:url here and every admin threw on load.
+    const source = readFileSync(new URL('./one-copy.js', import.meta.url), 'utf-8')
+    assert.doesNotMatch(source, /from ['"]node:/)
+    const scope = {}
+    claimCopy('https://cms.example.com/assets/index-abc.js', '0.8.1', scope)
+    assert.strictEqual(scope[Symbol.for('basicben.core')].at, '/assets')
   })
 })

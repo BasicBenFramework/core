@@ -17,11 +17,18 @@
  * modules while keeping `globalThis` is not two installs.
  */
 
-import { fileURLToPath } from 'node:url'
-import { dirname } from 'node:path'
+// No node: imports. The hook registry loads this, and the registry is in the
+// browser too (core/content imports it), where node:url and node:path are
+// empty stubs: 0.8.0 called fileURLToPath from one and every admin bundle
+// threw on load. The URL API is in both.
 import pkg from '../package.json' with { type: 'json' }
 
 const KEY = Symbol.for('basicben.core')
+
+/** The directory of a module URL, as a path: no query, hash or trailing slash. */
+function directoryOf(url) {
+  return decodeURIComponent(new URL('.', url).pathname).replace(/\/$/, '')
+}
 
 /**
  * Record this copy, or refuse because another copy is loaded.
@@ -34,7 +41,7 @@ const KEY = Symbol.for('basicben.core')
 export function claimCopy(url, version, scope = globalThis) {
   // The directory, not the URL, so a query string a test runner adds does
   // not make the same files look like a second copy.
-  const at = dirname(fileURLToPath(url))
+  const at = directoryOf(url)
   const first = scope[KEY]
 
   if (first && first.at !== at) {
