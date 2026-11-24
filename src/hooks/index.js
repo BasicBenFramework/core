@@ -5,6 +5,9 @@
  * Plugins can register callbacks that fire at specific points.
  */
 
+// Refuses to load beside another copy of the framework: see one-copy.js.
+import '../one-copy.js'
+
 /**
  * Hook Manager - Central registry for all hooks
  *

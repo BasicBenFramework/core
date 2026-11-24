@@ -1,10 +1,4 @@
 /**
- * Hook System for BasicBen CMS
- *
- * Provides WordPress-like action and filter hooks for extensibility.
- * Plugins can register callbacks that fire at specific points.
- */
-/**
  * Hook Manager - Central registry for all hooks
  *
  * @example

@@ -3,6 +3,8 @@
  * Provides a unified interface for SQLite and Postgres.
  */
 
+// Refuses to load beside another copy of the framework: see one-copy.js.
+import '../one-copy.js'
 import { loadConfig } from '../server/loader.js'
 import { QueryBuilder } from './QueryBuilder.js'
 
