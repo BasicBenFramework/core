@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-11-25
 
 Search engines and link previews. Before this, every URL of a BasicBen app was
 served the same empty `<div id="root">` under one `<title>`, unknown paths
