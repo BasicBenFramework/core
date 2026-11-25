@@ -1,5 +1,52 @@
 # Changelog
 
+## Unreleased
+
+Search engines and link previews. Before this, every URL of a BasicBen app was
+served the same empty `<div id="root">` under one `<title>`, unknown paths
+answered 200, and the home page was cached for a day.
+
+### Added
+
+- **Page metadata.** `createClientApp({ head })` sets site-wide defaults
+  (`title`, `titleTemplate`, `description`, `siteUrl`, `image`, `locale`,
+  `twitterSite`), a route's `head` (an object, or a function of its params)
+  sets one page's, and `useHead()` sets what a page learns after fetching. The
+  router keeps `<title>`, description, canonical, robots, Open Graph, Twitter
+  and JSON-LD tags in step on navigation. Unmatched paths are `noindex`. Apps
+  that set neither are left alone. `resolveHead`, `headTags` and `applyHead`
+  are exported for custom setups.
+- **Prerendering.** `prerender: true` in basicben.config.js (or
+  `basicben build --prerender`) renders every route without params or guards
+  to its own HTML file with its head tags, plus `404.html`, and with
+  `head.siteUrl`, `sitemap.xml` and `robots.txt` (unless `public/` has one).
+  `prerender.paths` adds paths such as `/posts/1`. The build keeps the clean
+  shell and the route patterns in `dist/client/.basicben/`.
+- **Real 404s.** After a prerendering build, `static: { spa: true }` serves a
+  prerendered page at its path, the clean shell for client routes that were
+  not prerendered, and `404.html` **with a 404 status** for paths no client
+  route matches.
+- **`trailingSlash: 'redirect'`** answers a GET or HEAD for `/about/` with a
+  301 to `/about`, query kept.
+- **Compression.** `serveStatic` sends text files of 1 KB and up with brotli
+  or gzip, as the client accepts (`compress: false` turns it off). Range
+  requests and untrusted mounts are never compressed.
+- **Hash links scroll.** Navigating to `/page#section` scrolls to the element
+  once the page has rendered, on first load too.
+
+### Changed
+
+- **Static cache policy by file kind.** HTML, `/` included, is `no-cache`
+  (it was `max-age=86400`, so a deploy could leave the home page pointing at
+  deleted assets for a day). Files under `immutable` paths — `/assets/` by
+  default, where Vite writes hashed names — are `public, max-age=31536000,
+  immutable`. Everything else keeps `maxAge`.
+- **Text types carry `charset=utf-8`** in Content-Type (`text/html`,
+  `text/css`, JavaScript, JSON, XML, plain text). `.webmanifest` is served as
+  `application/manifest+json`.
+- **The generated production entry** (apps without their own server) turns
+  on `trailingSlash: 'redirect'`.
+
 ## 0.9.0 — 2026-11-24
 
 This release finishes the items the November 2026 review left open: S13 and the

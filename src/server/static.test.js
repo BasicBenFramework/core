@@ -71,7 +71,7 @@ describe('spaFallback', () => {
 
     assert.strictEqual(fellThrough, false)
     assert.strictEqual(res.statusCode, 200)
-    assert.strictEqual(res.headers['content-type'], 'text/html')
+    assert.strictEqual(res.headers['content-type'], 'text/html; charset=utf-8')
   })
 
   test('never caches the shell', async () => {

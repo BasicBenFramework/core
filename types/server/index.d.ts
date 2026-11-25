@@ -15,6 +15,12 @@ export function createServer(options?: {}): Promise<{
     close(callback: any): void;
 }>;
 /**
+ * 301 from `/path/` to `/path`, keeping the query string. GET and HEAD only:
+ * a redirected POST would lose its body in some clients. `/` is left alone,
+ * and so is `//`, which is not a path to redirect but an open-redirect probe.
+ */
+export function redirectTrailingSlash(req: any, res: any, next: any): any;
+/**
  * Response helpers - added to res object
  */
 export function addResponseHelpers(req: any, res: any, next: any): void;

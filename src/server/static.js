@@ -3,17 +3,19 @@
  * Serves files from a directory with caching headers.
  */
 
-import { createReadStream, statSync } from 'node:fs'
+import { createReadStream, statSync, readFileSync } from 'node:fs'
 import { join, extname, resolve } from 'node:path'
+import { createGzip, createBrotliCompress, constants as zlib } from 'node:zlib'
 import { conditional, weakEtag, parseRange } from './etag.js'
+import { compileRoute } from '../routing/match.js'
 
 const mimeTypes = {
-  '.html': 'text/html',
-  '.htm': 'text/html',
-  '.css': 'text/css',
-  '.js': 'application/javascript',
-  '.mjs': 'application/javascript',
-  '.json': 'application/json',
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -31,8 +33,9 @@ const mimeTypes = {
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
   '.pdf': 'application/pdf',
-  '.txt': 'text/plain',
-  '.xml': 'application/xml',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.zip': 'application/zip'
 }
 
@@ -49,15 +52,108 @@ const ACTIVE_EXTENSIONS = new Set([
   '.js', '.mjs', '.cjs', '.wasm'
 ])
 
+/** Types worth compressing: text, and the text formats with other names. */
+const COMPRESSIBLE = /^(text\/|application\/(javascript|json|xml|manifest\+json)|image\/svg\+xml)/
+
+/** Below this, compression saves less than its own overhead. */
+const MIN_COMPRESS_BYTES = 1024
+
+/** A year: what a file whose name changes with its content can be cached for. */
+const IMMUTABLE_MAX_AGE = 31536000
+
+/**
+ * Where the build writes what the server needs but must not serve: the clean
+ * app shell and the client route list (see commands/prerender.js). A dot
+ * directory, so serveStatic's dotfile rule keeps it private.
+ */
+export const BUILD_META_DIR = '.basicben'
+
 const defaults = {
   dir: 'public',
   prefix: '/',
   maxAge: 86400, // 24 hours in seconds
+  // Paths (below the prefix) whose file names carry a content hash, cached for
+  // a year as immutable. Vite writes its hashed output to /assets/.
+  immutable: [/^\/assets\//],
   index: 'index.html',
   dotfiles: 'ignore', // 'ignore', 'allow', 'deny'
+  compress: true, // gzip or brotli for text files of 1 KB and up
   spa: false, // serve index.html for unmatched client routes
   spaExclude: [/^\/api\//],
   untrusted: false // the directory holds user uploads; see serveStatic
+}
+
+/**
+ * Cache-Control for a static file.
+ *
+ * HTML is `no-cache` (stored, but revalidated every time — cheap with the
+ * ETag): a page names the hashed assets of the build that wrote it, and a
+ * stale one points at files the next deploy deleted. Hashed assets never
+ * change under their name, so they are cached for a year. Everything else
+ * gets `maxAge`.
+ */
+function cacheControlFor(filePath, mime, config) {
+  if (mime.startsWith('text/html')) return 'no-cache'
+  if ((config.immutable || []).some((pattern) => pattern.test(filePath))) {
+    return `public, max-age=${IMMUTABLE_MAX_AGE}, immutable`
+  }
+  return `public, max-age=${config.maxAge}`
+}
+
+/**
+ * The encoding to send a body in, or null for none.
+ *
+ * Brotli when the client takes it, else gzip. Only for compressible types of
+ * at least 1 KB, never for a range request (byte offsets are into the
+ * uncompressed file).
+ */
+function chooseEncoding(req, mime, size, config) {
+  if (!config.compress || size < MIN_COMPRESS_BYTES || !COMPRESSIBLE.test(mime)) return null
+  if (req.headers?.range) return null
+  // `gzip;q=0` is a refusal, so the weights are read rather than matched.
+  const accepted = new Set()
+  for (const part of String(req.headers?.['accept-encoding'] || '').split(',')) {
+    const [name, ...params] = part.trim().toLowerCase().split(';')
+    const q = params.map((p) => p.trim()).find((p) => p.startsWith('q='))
+    if (name && !(q && Number(q.slice(2)) === 0)) accepted.add(name)
+  }
+  const takes = (name) => accepted.has(name)
+  if (takes('br')) return 'br'
+  if (takes('gzip')) return 'gzip'
+  return null
+}
+
+/**
+ * Stream a file to the response, compressed if `encoding` says so.
+ * Content-Length is set by the caller only for an uncompressed body.
+ */
+function sendFile(req, res, fullPath, { encoding = null, range = null, label = 'Static file' } = {}) {
+  if (encoding) res.setHeader('Content-Encoding', encoding)
+
+  if (req.method === 'HEAD') {
+    res.end()
+    return
+  }
+
+  let stream = createReadStream(fullPath, range ? { start: range.start, end: range.end } : undefined)
+  const source = stream
+  if (encoding) {
+    const compressor = encoding === 'br'
+      ? createBrotliCompress({ params: { [zlib.BROTLI_PARAM_QUALITY]: 5 } })
+      : createGzip({ level: 6 })
+    stream = stream.pipe(compressor)
+  }
+
+  stream.pipe(res)
+  source.on('error', (err) => {
+    console.error(`${label} error:`, err)
+    if (!res.headersSent) {
+      res.statusCode = 500
+      res.end('Internal Server Error')
+    } else {
+      res.destroy(err)
+    }
+  })
 }
 
 /**
@@ -75,7 +171,11 @@ const defaults = {
  * @param {Object} [options]
  * @param {string} [options.dir]
  * @param {string} [options.prefix]
- * @param {number} [options.maxAge] - seconds
+ * @param {number} [options.maxAge] - seconds, for files that are neither HTML (always
+ *   `no-cache`) nor under an `immutable` path
+ * @param {RegExp[]} [options.immutable] - paths below the prefix whose names carry a content
+ *   hash, cached for a year as immutable (default `[/^\/assets\//]`, where Vite writes)
+ * @param {boolean} [options.compress] - gzip or brotli for text files of 1 KB and up (default true)
  * @param {string} [options.index]
  * @param {'ignore'|'allow'|'deny'} [options.dotfiles]
  * @param {boolean} [options.spa]
@@ -173,6 +273,7 @@ export function serveStatic(options = {}) {
     // Set headers
     res.setHeader('Content-Type', mime)
     res.setHeader('Accept-Ranges', 'bytes')
+    if (config.compress && COMPRESSIBLE.test(mime)) res.setHeader('Vary', 'Accept-Encoding')
 
     // The validators go on before anything else, and a client whose copy is
     // still good gets a 304 here rather than the file. Last-Modified was
@@ -182,7 +283,7 @@ export function serveStatic(options = {}) {
     const answered = conditional(req, res, {
       etag: weakEtag(stat),
       lastModified: stat.mtime,
-      cacheControl: `public, max-age=${config.maxAge}`
+      cacheControl: cacheControlFor(filePath, mime, config)
     })
 
     if (answered) return
@@ -205,24 +306,10 @@ export function serveStatic(options = {}) {
       res.setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`)
     }
 
-    res.setHeader('Content-Length', length)
+    const encoding = config.untrusted ? null : chooseEncoding(req, mime, stat.size, config)
+    if (!encoding) res.setHeader('Content-Length', length)
 
-    // Handle HEAD request
-    if (req.method === 'HEAD') {
-      res.end()
-      return
-    }
-
-    // Stream file
-    const stream = createReadStream(fullPath, range ? { start, end } : undefined)
-    stream.pipe(res)
-    stream.on('error', (err) => {
-      console.error('Static file error:', err)
-      if (!res.headersSent) {
-        res.statusCode = 500
-        res.end('Internal Server Error')
-      }
-    })
+    sendFile(req, res, fullPath, { encoding, range: range ? { start, end } : null })
   }
 }
 
@@ -233,12 +320,46 @@ export function serveStatic(options = {}) {
  * browser-side router can take over. Intended for `onNoMatch`, which runs after
  * route matching — putting this in the middleware chain would shadow the API,
  * since static middleware runs before routes are matched.
+ *
+ * After `basicben build` with `prerender` on, it does three more things, all
+ * from files the build wrote:
+ *
+ * - a prerendered page is served for its path: `/docs/routing` gets
+ *   `docs/routing.html`, with its own content and head tags;
+ * - a path no client route matches gets a real **404** (with `404.html` if
+ *   the build wrote one) instead of a 200 that search engines record as a soft
+ *   404 — the build saved the client route patterns to `.basicben/routes.json`;
+ * - a client route that was not prerendered (one with params, a guarded one)
+ *   gets the clean shell, `.basicben/shell.html`, not `index.html` — which is
+ *   now the prerendered home page, and would give every such URL the home
+ *   page's content and canonical link.
+ *
+ * Without those files it behaves as it always has.
  */
 export function spaFallback(options = {}, next) {
   const config = { ...defaults, ...options }
   const root = resolve(process.cwd(), config.dir)
   const indexPath = join(root, config.index)
   const exclude = config.spaExclude || defaults.spaExclude
+
+  // Read once, on the first request: the build wrote them before start.
+  let meta
+  const buildMeta = () => {
+    if (meta) return meta
+    const shellPath = join(root, BUILD_META_DIR, 'shell.html')
+    const notFoundPath = join(root, '404.html')
+    let routes = null
+    try {
+      const patterns = JSON.parse(readFileSync(join(root, BUILD_META_DIR, 'routes.json'), 'utf8')).routes
+      if (Array.isArray(patterns)) routes = patterns.map((pattern) => compileRoute(pattern))
+    } catch {}
+    meta = {
+      shell: isFile(shellPath) ? shellPath : indexPath,
+      notFound: isFile(notFoundPath) ? notFoundPath : null,
+      routes
+    }
+    return meta
+  }
 
   return (req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -258,33 +379,46 @@ export function spaFallback(options = {}, next) {
       return next(req, res)
     }
 
-    let stat
-    try {
-      stat = statSync(indexPath)
-    } catch {
-      return next(req, res)
+    const { shell, notFound, routes } = buildMeta()
+
+    // A prerendered page for this path. Dot segments and dotfiles are never
+    // looked up: `..` is resolved by URL parsing already, and the build's
+    // private directory starts with a dot.
+    const clean = urlPath.replace(/\/+$/, '')
+    if (clean && !ext && !clean.split('/').some((segment) => segment.startsWith('.'))) {
+      const page = join(root, `${clean}.html`)
+      if (page.startsWith(root) && isFile(page)) return sendHtmlFile(req, res, page, 200, config)
     }
 
-    res.statusCode = 200
-    res.setHeader('Content-Type', 'text/html')
-    res.setHeader('Content-Length', stat.size)
-    // The shell references hashed assets that change on every build, so it must
-    // never be cached — a stale shell points at files that no longer exist.
-    res.setHeader('Cache-Control', 'no-cache')
-
-    if (req.method === 'HEAD') {
-      res.end()
-      return
+    if (routes && !routes.some((route) => {
+      try { return route.match(urlPath) !== null } catch { return false }
+    })) {
+      return sendHtmlFile(req, res, notFound ?? shell, 404, config)
     }
 
-    const stream = createReadStream(indexPath)
-    stream.pipe(res)
-    stream.on('error', (err) => {
-      console.error('SPA fallback error:', err)
-      if (!res.headersSent) {
-        res.statusCode = 500
-        res.end('Internal Server Error')
-      }
-    })
+    if (!isFile(shell)) return next(req, res)
+    sendHtmlFile(req, res, shell, 200, config)
   }
+}
+
+function isFile(path) {
+  try {
+    return statSync(path).isFile()
+  } catch {
+    return false
+  }
+}
+
+function sendHtmlFile(req, res, path, status, config) {
+  const { size } = statSync(path)
+  res.statusCode = status
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  // The shell references hashed assets that change on every build, so it must
+  // never be cached — a stale shell points at files that no longer exist.
+  res.setHeader('Cache-Control', 'no-cache')
+  if (config.compress) res.setHeader('Vary', 'Accept-Encoding')
+
+  const encoding = chooseEncoding(req, 'text/html', size, config)
+  if (!encoding) res.setHeader('Content-Length', size)
+  sendFile(req, res, path, { encoding, label: 'SPA fallback' })
 }

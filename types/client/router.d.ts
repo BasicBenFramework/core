@@ -5,7 +5,8 @@
  *   component: import('react').ComponentType<any>,
  *   auth?: boolean,
  *   guest?: boolean,
- *   layout?: import('react').ComponentType<any> | null
+ *   layout?: import('react').ComponentType<any> | null,
+ *   head?: import('./head.js').HeadMeta | ((params: Record<string, string>) => import('./head.js').HeadMeta)
  * }} RouteDefinition
  */
 /**
@@ -29,6 +30,10 @@
  * @param {import('react').ComponentType<any>} [config.NotFound] - Component rendered when no route matches.
  *   Receives no props and is wrapped in the default layout, so an unmatched path
  *   keeps the site's navigation instead of rendering a bare string.
+ * @param {import('./head.js').HeadConfig} [config.head] - Site-wide page metadata: the
+ *   site name and title template, default description and share image, and `siteUrl` for
+ *   canonical links. With this or any route's `head`, the router keeps <title> and the meta
+ *   tags in step with the route, and `basicben build` can prerender them (see `prerender`).
  * @param {import('react').ComponentType<{children: any}>} [config.provider] - Wraps the
  *   entire tree, outside the auth and router contexts. Use it for anything every
  *   route needs and that must survive navigation — a query client, a data
@@ -45,6 +50,7 @@ export function createClientApp(config: {
     homePath?: string;
     Loading?: import("react").ComponentType<any>;
     NotFound?: import("react").ComponentType<any>;
+    head?: import("./head.js").HeadConfig;
     provider?: import("react").ComponentType<{
         children: any;
     }>;
@@ -57,4 +63,5 @@ export type RouteDefinition = import("react").ComponentType<any> | {
     auth?: boolean;
     guest?: boolean;
     layout?: import("react").ComponentType<any> | null;
+    head?: import("./head.js").HeadMeta | ((params: Record<string, string>) => import("./head.js").HeadMeta);
 };

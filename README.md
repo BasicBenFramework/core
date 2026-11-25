@@ -350,6 +350,77 @@ Without `NotFound` an unmatched path renders a bare `404 - Not Found` string wit
 no navigation, so it is worth supplying one. Pair it with `static: { spa: true }`
 on the server, which is what lets a deep link reach the client router at all.
 
+### Page metadata and prerendering
+
+Give the app a `head`, and each route its own, and the router keeps `<title>`,
+the description, canonical link, robots, Open Graph and Twitter tags in step
+with the page:
+
+```js
+export default createClientApp({
+  head: {
+    title: 'My Site',                 // the home page's title, and og:site_name
+    titleTemplate: '%s — My Site',    // or a function of the page title
+    description: 'What the site is',  // for pages that set none
+    siteUrl: 'https://example.com',   // canonical and og:url; the sitemap
+    image: 'https://example.com/card.png'
+  },
+  routes: {
+    '/': Home,
+    '/about': { component: About, head: { title: 'About', description: 'Who we are' } },
+    '/posts/:id': { component: Post, head: (params) => ({ title: `Post ${params.id}` }) },
+  }
+})
+```
+
+A route's `head` takes `title`, `fullTitle` (skip the template), `description`,
+`canonical`, `image`, `noindex`, `type` and `jsonLd`. Unmatched paths are
+`noindex`. For what a page learns only after fetching, call `useHead()` inside
+it; it lays over the route's head for the current path and lapses on
+navigation:
+
+```js
+const post = usePost(id)
+useHead(post && { title: post.title, description: post.excerpt, image: post.image })
+```
+
+The router renders in the browser, so a crawler that does not run JavaScript
+— most link previews, many search engines — sees one empty `<div id="root">`
+for every URL. **Prerendering** fixes that at build time:
+
+```js
+// basicben.config.js
+export default {
+  prerender: true,   // or { paths: ['/posts/1'], entry, notFound, sitemap }
+}
+```
+
+(or `basicben build --prerender`). Every route without params or guards is
+rendered to its own HTML file with its head tags — `/` to `index.html`,
+`/docs/routing` to `docs/routing.html` — plus `404.html` (noindex), and with
+`siteUrl` set, `sitemap.xml` and a `robots.txt` (unless `public/` has one).
+The browser still mounts the app and renders the page afresh, so nothing about
+how it behaves changes. A component that reads `window`, `document` or
+`localStorage` while rendering fails the build with the route named; move that
+into an effect.
+
+The server uses what the build wrote. With `static: { spa: true }`, a
+prerendered path gets its page, a client route that was not prerendered gets
+the clean app shell, and a path that matches no client route gets a real
+**404** with `404.html` — not a 200 that search engines file as a soft 404.
+Static hosts (Cloudflare Pages, Netlify, Vercel with `cleanUrls`) serve
+`docs/routing.html` at `/docs/routing` and `404.html` for missing paths
+themselves; on one of those, routes with params need the host's own rewrite to
+the shell (`.basicben/shell.html`).
+
+`trailingSlash: 'redirect'` in the server config answers `/about/` with a 301
+to `/about`, so each page has one URL. The entry `basicben build` generates for
+an app without its own server turns it on.
+
+Static files are sent with a charset, compressed (brotli or gzip, for text of
+1 KB and up), and cached by kind: HTML `no-cache`, Vite's hashed `/assets/`
+for a year as `immutable`, everything else for `maxAge`.
+
 ---
 
 ## Controllers

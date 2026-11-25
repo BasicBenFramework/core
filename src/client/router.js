@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, createElement } from 'react'
-import { RouterContext, AuthContext } from './context.js'
+import { RouterContext, AuthContext, HeadContext } from './context.js'
+import { resolveHead, routeHead, applyHead, NOT_FOUND_HEAD } from './head.js'
 import { createMatcher, resolveLocation, locationPath, guardRedirect } from './location.js'
 
 /**
@@ -9,7 +10,8 @@ import { createMatcher, resolveLocation, locationPath, guardRedirect } from './l
  *   component: import('react').ComponentType<any>,
  *   auth?: boolean,
  *   guest?: boolean,
- *   layout?: import('react').ComponentType<any> | null
+ *   layout?: import('react').ComponentType<any> | null,
+ *   head?: import('./head.js').HeadMeta | ((params: Record<string, string>) => import('./head.js').HeadMeta)
  * }} RouteDefinition
  */
 
@@ -34,6 +36,10 @@ import { createMatcher, resolveLocation, locationPath, guardRedirect } from './l
  * @param {import('react').ComponentType<any>} [config.NotFound] - Component rendered when no route matches.
  *   Receives no props and is wrapped in the default layout, so an unmatched path
  *   keeps the site's navigation instead of rendering a bare string.
+ * @param {import('./head.js').HeadConfig} [config.head] - Site-wide page metadata: the
+ *   site name and title template, default description and share image, and `siteUrl` for
+ *   canonical links. With this or any route's `head`, the router keeps <title> and the meta
+ *   tags in step with the route, and `basicben build` can prerender them (see `prerender`).
  * @param {import('react').ComponentType<{children: any}>} [config.provider] - Wraps the
  *   entire tree, outside the auth and router contexts. Use it for anything every
  *   route needs and that must survive navigation — a query client, a data
@@ -48,6 +54,7 @@ export function createClientApp(config) {
     Loading,
     NotFound,
     provider: Provider,
+    head: headConfig,
     authEndpoint = '/api/user',
     logoutEndpoint = '/api/auth/logout',
     loginPath = '/login',
@@ -63,8 +70,13 @@ export function createClientApp(config) {
       auth: isSimple ? false : value.auth || false,
       guest: isSimple ? false : value.guest || false,
       layout: isSimple ? null : value.layout || null,
+      head: isSimple ? null : value.head || null,
     }
   })
+
+  // Only an app that asked for head management gets it: one that sets
+  // document.title itself must not have it overwritten on every navigation.
+  const managesHead = Boolean(headConfig) || normalizedRoutes.some((route) => route.head)
 
   // The same matcher the server uses: trailing slashes, literal dots and
   // decoded params all behave alike on both sides.
@@ -90,6 +102,9 @@ export function createClientApp(config) {
     // render is the real one, not a Loading flash.
     const [loading, setLoading] = useState(() => authEndpoint !== false && hasToken())
     const [location, setLocation] = useState(currentLocation)
+    // useHead()'s override, kept with the path it was set on so that it
+    // lapses when the visitor navigates away.
+    const [headOverride, setHeadOverride] = useState(null)
 
     // Navigate function. Takes a path with or without a query string and
     // hash, or a full URL; another origin is a full page load.
@@ -112,6 +127,17 @@ export function createClientApp(config) {
       setLocation({ pathname: next.pathname, search: next.search, hash: next.hash })
       if (!next.hash) window.scrollTo(0, 0)
     }, [])
+
+    // A `#fragment` scrolls to its element once the page that has it has
+    // rendered — on the first load too, where the browser looked for the
+    // element before the app had drawn it.
+    useEffect(() => {
+      if (!location.hash || location.hash === '#') return
+      let id = location.hash.slice(1)
+      try { id = decodeURIComponent(id) } catch {}
+      const el = document.getElementById(id)
+      if (el) el.scrollIntoView()
+    }, [location.pathname, location.hash])
 
     // Logout function
     const logout = useCallback(() => {
@@ -167,6 +193,19 @@ export function createClientApp(config) {
       if (redirect) navigate(redirect, { replace: true })
     }, [redirect, navigate])
 
+    // The page's head: the route's, then useHead()'s on top, over the app's
+    // defaults. An unmatched path is noindex unless its route says otherwise.
+    const override = headOverride && headOverride.path === location.pathname ? headOverride.meta : null
+    const pageHead = matched ? routeHead(matched.route, matched.params) : NOT_FOUND_HEAD
+    const head = managesHead ? resolveHead(headConfig, { ...pageHead, ...override }, location.pathname) : null
+    const headKey = head ? JSON.stringify(head) : ''
+
+    useEffect(() => {
+      if (head) applyHead(head)
+    }, [headKey])
+
+    const headValue = useMemo(() => ({ set: setHeadOverride }), [])
+
     const routerValue = useMemo(() => ({
       path: location.pathname,
       search: location.search,
@@ -216,7 +255,7 @@ export function createClientApp(config) {
       createElement(
         RouterContext.Provider,
         { value: routerValue },
-        wrapped
+        createElement(HeadContext.Provider, { value: headValue }, wrapped)
       )
     )
 
@@ -226,6 +265,12 @@ export function createClientApp(config) {
     // that only covered the matched route would remount on every navigation.
     return Provider ? createElement(Provider, null, tree) : tree
   }
+
+  // What `basicben build` reads to prerender: the route table and the head
+  // defaults. Not part of the rendered app.
+  App.routes = normalizedRoutes.map(({ path, auth, guest, head }) => ({ path, auth, guest, head }))
+  App.head = headConfig || null
+  App.managesHead = managesHead
 
   return App
 }

@@ -47,6 +47,13 @@ export async function createServer(options = {}) {
   // Core middleware
   app.use(addResponseHelpers)
 
+  // `/about` and `/about/` both match the same route, which a search engine
+  // sees as two pages with the same content. `trailingSlash: 'redirect'`
+  // answers the slashed form of a GET or HEAD with a 301 to the bare one.
+  if (mergedConfig.trailingSlash === 'redirect') {
+    app.use(redirectTrailingSlash)
+  }
+
   // First, so every response — 404s and errors included — carries them, and
   // before any handler, so one that sets its own header replaces the default.
   if (mergedConfig.securityHeaders !== false) {
@@ -193,6 +200,24 @@ export async function createServer(options = {}) {
  * The error handler then wrote a second response into the same socket.
  */
 const endingResponses = new WeakSet()
+
+/**
+ * 301 from `/path/` to `/path`, keeping the query string. GET and HEAD only:
+ * a redirected POST would lose its body in some clients. `/` is left alone,
+ * and so is `//`, which is not a path to redirect but an open-redirect probe.
+ */
+export function redirectTrailingSlash(req, res, next) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+  const path = req.path || '/'
+  if (path.length <= 1 || !path.endsWith('/') || path.startsWith('//')) return next()
+
+  const bare = path.replace(/\/+$/, '') || '/'
+  const query = (req.url || '').includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
+  res.statusCode = 301
+  res.setHeader('Location', bare + query)
+  res.setHeader('Content-Length', 0)
+  res.end()
+}
 
 /**
  * Request hooks middleware - fires request.before and request.after hooks

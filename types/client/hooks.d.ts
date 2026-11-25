@@ -75,3 +75,15 @@ export function Link({ to, replace, onClick, children, ...rest }: {
     href: string;
     onClick: (event: any) => void;
 }, HTMLElement>;
+/**
+ * Set this page's head from inside it: what is known only once the page has
+ * its data — a post's title, its excerpt as the description, its image.
+ *
+ * It is laid over the route's `head` and the app's defaults (createClientApp's
+ * `head`), applies to the current path only, and lapses on navigation. It runs
+ * in the browser: a prerendered page's HTML carries the route's `head`, not
+ * this.
+ *
+ * @param {import('./head.js').HeadMeta | null | undefined} meta
+ */
+export function useHead(meta: import("./head.js").HeadMeta | null | undefined): void;

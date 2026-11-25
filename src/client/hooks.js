@@ -1,5 +1,5 @@
-import { useContext, useMemo, useCallback, createElement } from 'react'
-import { RouterContext, AuthContext } from './context.js'
+import { useContext, useMemo, useCallback, useEffect, createElement } from 'react'
+import { RouterContext, AuthContext, HeadContext } from './context.js'
 import { nextSearch, shouldHandleClick } from './location.js'
 
 /**
@@ -140,4 +140,29 @@ export function Link({ to, replace = false, onClick, children, ...rest }) {
   }
 
   return createElement('a', { ...rest, href: to, onClick: handleClick }, children)
+}
+
+/**
+ * Set this page's head from inside it: what is known only once the page has
+ * its data — a post's title, its excerpt as the description, its image.
+ *
+ * It is laid over the route's `head` and the app's defaults (createClientApp's
+ * `head`), applies to the current path only, and lapses on navigation. It runs
+ * in the browser: a prerendered page's HTML carries the route's `head`, not
+ * this.
+ *
+ * @param {import('./head.js').HeadMeta | null | undefined} meta
+ */
+export function useHead(meta) {
+  const head = useContext(HeadContext)
+  const router = useContext(RouterContext)
+  if (!head || !router) {
+    throw new Error('useHead must be used within createClientApp')
+  }
+  const path = router.path
+  const key = meta ? JSON.stringify(meta) : ''
+
+  useEffect(() => {
+    head.set(meta ? { path, meta } : null)
+  }, [key, path])
 }

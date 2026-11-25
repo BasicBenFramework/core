@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, copyFileSync, readdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { bold, cyan, green, yellow, dim, red } from '../cli/colors.js'
 import { spawnBin } from '../cli/spawn.js'
+import { loadConfig } from '../server/loader.js'
 
 export async function run(args, flags) {
   const cwd = process.cwd()
@@ -29,6 +30,29 @@ export async function run(args, flags) {
   }
 
   console.log(`\n${green('✓')} Client built to ${dim(outDir)}\n`)
+
+  // Prerender: `prerender` in basicben.config.js, or --prerender.
+  // Read for `prerender` only. A config that cannot load here (it imports
+  // something only the server can) must not fail a build that does not
+  // prerender, as it did not before this option existed.
+  let config = {}
+  try {
+    config = await loadConfig()
+  } catch (err) {
+    if (flags.prerender) throw err
+  }
+  const prerenderOption = flags.prerender ? (config.prerender || true) : config.prerender
+  if (prerenderOption) {
+    console.log(`${cyan('Prerendering pages...')}\n`)
+    try {
+      const { prerender } = await import('./prerender.js')
+      const { pages } = await prerender(cwd, outDir, prerenderOption === true ? {} : prerenderOption)
+      console.log(`\n${green('✓')} Prerendered ${pages.length} page${pages.length === 1 ? '' : 's'}\n`)
+    } catch (err) {
+      console.error(`\n${red(err.message)}\n`)
+      process.exit(1)
+    }
+  }
 
   // Static-only build stops here
   if (staticOnly) {
@@ -164,7 +188,8 @@ async function prepareServer(cwd) {
 import { createServer } from '@basicbenframework/core/server'
 
 const app = await createServer({
-  static: { dir: 'dist/client', spa: true }
+  static: { dir: 'dist/client', spa: true },
+  trailingSlash: 'redirect'
 })
 
 const port = process.env.PORT || 3001

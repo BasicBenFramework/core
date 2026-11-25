@@ -24,7 +24,7 @@ ${bold('Usage:')}
 
 ${bold('Development')}
   ${cyan('dev')}                Start Vite + Node dev server
-  ${cyan('build')}              Build for production
+  ${cyan('build')}              Build for production (--prerender: write each page's HTML)
   ${cyan('start')}              Start production server
   ${cyan('test')}               Run tests with node --test
 
