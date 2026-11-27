@@ -133,4 +133,24 @@ describe('client router, rendered', { skip }, () => {
     setParams({ q: 'x' }, { replace: true })
     assert.deepStrictEqual(calls.find(c => c[0] === 'replaceState'), ['replaceState', '/posts?q=x#comments'])
   })
+
+  test('transitions: a move to another page runs inside a view transition', () => {
+    const run = (options, to, { reduced = false, supported = true } = {}) => {
+      const calls = fakeBrowser('https://app.test/a')
+      window.matchMedia = (q) => ({ matches: reduced && q.includes('reduce') })
+      globalThis.document = supported ? { startViewTransition: (cb) => { calls.push(['transition']); cb() } } : {}
+      let navigate
+      const Page = () => { navigate = client.useNavigate(); return h('p', null, 'a') }
+      const App = client.createClientApp({ routes: { '/a': Page, '/b': Page }, ...options })
+      renderToString(h(App))
+      navigate(to)
+      delete globalThis.document
+      return calls.filter(c => c[0] === 'transition' || c[0] === 'pushState').map(c => c[0])
+    }
+    assert.deepStrictEqual(run({ transitions: true }, '/b'), ['pushState', 'transition'])
+    assert.deepStrictEqual(run({ transitions: true }, '/a#part'), ['pushState'], 'same page: no transition')
+    assert.deepStrictEqual(run({ transitions: true }, '/b', { reduced: true }), ['pushState'], 'reduced motion: none')
+    assert.deepStrictEqual(run({ transitions: true }, '/b', { supported: false }), ['pushState'], 'unsupported: none')
+    assert.deepStrictEqual(run({}, '/b'), ['pushState'], 'off by default')
+  })
 })

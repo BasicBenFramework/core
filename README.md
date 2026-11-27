@@ -335,6 +335,22 @@ a `URLSearchParams`, or a function of the current params. It keeps the path,
 and `{ replace: true }` replaces the history entry. `usePath()` is the pathname
 alone, and `useSearch()` is the raw `?…` string.
 
+Page changes can animate. `transitions: true` runs each move to another page
+through the browser's [View Transitions API](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API):
+the old page is snapshotted, the new one rendered, and the two cross-fade —
+back and forward too. Browsers without the API, and visitors who ask for
+reduced motion, navigate as before; a hash on the same page only scrolls.
+
+```js
+export default createClientApp({ transitions: true, routes: { /* ... */ } })
+```
+
+```css
+/* Keep the header still while the page under it fades. */
+header { view-transition-name: site-header; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 150ms; }
+```
+
 Two optional components round out the app shell:
 
 ```js
@@ -399,8 +415,20 @@ export default {
 rendered to its own HTML file with its head tags — `/` to `index.html`,
 `/docs/routing` to `docs/routing.html` — plus `404.html` (noindex), and with
 `siteUrl` set, `sitemap.xml` and a `robots.txt` (unless `public/` has one).
-The browser still mounts the app and renders the page afresh, so nothing about
-how it behaves changes. A component that reads `window`, `document` or
+The browser still mounts the app as before, so nothing about how it behaves
+changes. To keep the prerendered markup rather than draw the page again on
+load, hydrate it in `src/main.jsx` — the dev server's shell is empty, so check:
+
+```js
+const root = document.getElementById('root')
+const app = <App />
+if (root.hasChildNodes()) ReactDOM.hydrateRoot(root, app)
+else ReactDOM.createRoot(root).render(app)
+```
+
+Hydration needs the first render in the browser to match the prerender: state
+read from `localStorage` or `matchMedia` belongs in an effect, not in
+`useState`'s initial value. A component that reads `window`, `document` or
 `localStorage` while rendering fails the build with the route named; move that
 into an effect.
 

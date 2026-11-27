@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, createElement } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, createElement } from 'react'
 import { RouterContext, AuthContext, HeadContext } from './context.js'
 import { resolveHead, routeHead, applyHead, NOT_FOUND_HEAD } from './head.js'
 import { createMatcher, resolveLocation, locationPath, guardRedirect } from './location.js'
@@ -40,6 +40,9 @@ import { createMatcher, resolveLocation, locationPath, guardRedirect } from './l
  *   site name and title template, default description and share image, and `siteUrl` for
  *   canonical links. With this or any route's `head`, the router keeps <title> and the meta
  *   tags in step with the route, and `basicben build` can prerender them (see `prerender`).
+ * @param {boolean} [config.transitions] - Animate navigation with the browser's View
+ *   Transitions API: a cross-fade by default, styled with `::view-transition-*` CSS. Browsers
+ *   without it, and visitors who prefer reduced motion, navigate as before. Default false.
  * @param {import('react').ComponentType<{children: any}>} [config.provider] - Wraps the
  *   entire tree, outside the auth and router contexts. Use it for anything every
  *   route needs and that must survive navigation — a query client, a data
@@ -55,6 +58,7 @@ export function createClientApp(config) {
     NotFound,
     provider: Provider,
     head: headConfig,
+    transitions = false,
     authEndpoint = '/api/user',
     logoutEndpoint = '/api/auth/logout',
     loginPath = '/login',
@@ -88,6 +92,15 @@ export function createClientApp(config) {
     hash: window.location.hash
   })
 
+  // A view transition only for a move to another page, where the browser
+  // supports one and the visitor has not asked for less motion. A hash on the
+  // same page just scrolls.
+  const animates = (from, to) => transitions &&
+    from !== to &&
+    typeof document !== 'undefined' &&
+    typeof document.startViewTransition === 'function' &&
+    !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
   const hasToken = () => {
     try {
       return Boolean(localStorage.getItem('token'))
@@ -106,6 +119,23 @@ export function createClientApp(config) {
     // lapses when the visitor navigates away.
     const [headOverride, setHeadOverride] = useState(null)
 
+    // A view transition snapshots the old page, runs the update, and animates
+    // to the new page once the promise the update returns settles. That is
+    // when React has committed it: the layout effect below resolves the
+    // promise, before the browser paints.
+    const committed = useRef(null)
+    // The path on screen. On back/forward, window.location has already moved.
+    const shown = useRef(location.pathname)
+    const transition = (update) => {
+      const vt = document.startViewTransition(() => new Promise((resolve) => {
+        committed.current = resolve
+        update()
+      }))
+      // A second click mid-transition skips the first one, which rejects its
+      // `ready`. The page still updates; it is not an error worth logging.
+      vt?.ready?.catch(() => {})
+    }
+
     // Navigate function. Takes a path with or without a query string and
     // hash, or a full URL; another origin is a full page load.
     const navigate = useCallback((to, options = {}) => {
@@ -117,6 +147,7 @@ export function createClientApp(config) {
         return
       }
 
+      const animate = animates(shown.current, next.pathname)
       const target = locationPath(next)
       if (replace) {
         window.history.replaceState({}, '', target)
@@ -124,9 +155,19 @@ export function createClientApp(config) {
         window.history.pushState({}, '', target)
       }
 
-      setLocation({ pathname: next.pathname, search: next.search, hash: next.hash })
-      if (!next.hash) window.scrollTo(0, 0)
+      const update = () => {
+        setLocation({ pathname: next.pathname, search: next.search, hash: next.hash })
+        if (!next.hash) window.scrollTo(0, 0)
+      }
+      if (animate) transition(update)
+      else update()
     }, [])
+
+    useLayoutEffect(() => {
+      shown.current = location.pathname
+      committed.current?.()
+      committed.current = null
+    }, [location])
 
     // A `#fragment` scrolls to its element once the page that has it has
     // rendered — on the first load too, where the browser looked for the
@@ -175,7 +216,9 @@ export function createClientApp(config) {
     // Handle browser back/forward
     useEffect(() => {
       const handlePopState = () => {
-        setLocation(currentLocation())
+        const update = () => setLocation(currentLocation())
+        if (animates(shown.current, window.location.pathname)) transition(update)
+        else update()
       }
       window.addEventListener('popstate', handlePopState)
       return () => window.removeEventListener('popstate', handlePopState)

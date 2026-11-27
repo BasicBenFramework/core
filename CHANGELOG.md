@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Page transitions.** `createClientApp({ transitions: true })` animates each
+  move to another page, back and forward included, with the browser's View
+  Transitions API: a cross-fade by default, styled with `::view-transition-*`
+  CSS. Browsers without it, and visitors who prefer reduced motion, navigate
+  as before.
+
+### Docs
+
+- How to hydrate a prerendered page instead of rendering it again on load.
+
 ## 0.10.0 — 2026-11-25
 
 Search engines and link previews. Before this, every URL of a BasicBen app was

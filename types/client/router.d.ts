@@ -34,6 +34,9 @@
  *   site name and title template, default description and share image, and `siteUrl` for
  *   canonical links. With this or any route's `head`, the router keeps <title> and the meta
  *   tags in step with the route, and `basicben build` can prerender them (see `prerender`).
+ * @param {boolean} [config.transitions] - Animate navigation with the browser's View
+ *   Transitions API: a cross-fade by default, styled with `::view-transition-*` CSS. Browsers
+ *   without it, and visitors who prefer reduced motion, navigate as before. Default false.
  * @param {import('react').ComponentType<{children: any}>} [config.provider] - Wraps the
  *   entire tree, outside the auth and router contexts. Use it for anything every
  *   route needs and that must survive navigation — a query client, a data
@@ -51,6 +54,7 @@ export function createClientApp(config: {
     Loading?: import("react").ComponentType<any>;
     NotFound?: import("react").ComponentType<any>;
     head?: import("./head.js").HeadConfig;
+    transitions?: boolean;
     provider?: import("react").ComponentType<{
         children: any;
     }>;
